@@ -33,6 +33,7 @@ interface DebugLog {
 interface OptimizeResponse {
   optimizedResume?: string
   docxBase64?: string
+  structuredData?: Record<string, unknown>
   error?: string
   debug?: {
     prompt: string
@@ -40,9 +41,11 @@ interface OptimizeResponse {
     jobDescriptionLength: number
     responseLength?: number
     processingTime?: number
+    totalTime?: number
     model: string
-    paragraphCount?: number
     extractedResumePreview: string
+    skillsCount?: number
+    experienceCount?: number
   }
 }
 
@@ -121,7 +124,7 @@ export function ResumeOptimizer() {
       formData.append("apiKey", apiKey)
 
       addLog("request", "Sending request to /api/optimize-resume")
-      addLog("info", "Parsing DOCX XML structure for semantic rewrite...")
+      addLog("info", "Extracting text and generating structured resume data...")
       const startTime = Date.now()
 
       const response = await fetch("/api/optimize-resume", {
@@ -136,14 +139,19 @@ export function ResumeOptimizer() {
 
       if (data.debug) {
         setPromptSent(data.debug.prompt)
-        addLog("info", "Document XML parsed", `Extracted ${data.debug.paragraphCount || 0} paragraphs`)
-        addLog("info", "Text extracted", `${data.debug.resumeTextLength} characters from resume`)
+        addLog("info", "Resume text extracted", `${data.debug.resumeTextLength} characters`)
         addLog("info", "Model used", data.debug.model)
         if (data.debug.processingTime) {
           addLog("info", "AI processing time", `${data.debug.processingTime}ms`)
         }
-        if (data.debug.extractedResumePreview) {
-          addLog("info", "Resume preview (first 500 chars)", data.debug.extractedResumePreview)
+        if (data.debug.totalTime) {
+          addLog("info", "Total processing time", `${data.debug.totalTime}ms`)
+        }
+        if (data.debug.skillsCount !== undefined) {
+          addLog("info", "Skills extracted", `${data.debug.skillsCount} individual skills`)
+        }
+        if (data.debug.experienceCount !== undefined) {
+          addLog("info", "Experience entries", `${data.debug.experienceCount} positions`)
         }
       }
 
@@ -154,8 +162,8 @@ export function ResumeOptimizer() {
 
       if (data.optimizedResume) {
         setOptimizedResume(data.optimizedResume)
-        setRawResponse(data.optimizedResume)
-        addLog("success", "AI rewrite completed", `Output: ${data.optimizedResume.length} characters`)
+        setRawResponse(data.structuredData ? JSON.stringify(data.structuredData, null, 2) : data.optimizedResume)
+        addLog("success", "AI optimization completed", `Output: ${data.optimizedResume.length} characters`)
       }
 
       if (data.docxBase64) {
@@ -168,8 +176,7 @@ export function ResumeOptimizer() {
           type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         })
         setDocxBlob(blob)
-        addLog("success", "DOCX generated", `Preserved formatting in ${(blob.size / 1024).toFixed(2)} KB file`)
-        addLog("info", "Semantic rewrite complete - formatting preserved from original document")
+        addLog("success", "Professional DOCX generated", `${(blob.size / 1024).toFixed(2)} KB file ready for download`)
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "An unexpected error occurred"
@@ -236,7 +243,7 @@ export function ResumeOptimizer() {
           get started.
         </p>
         <p className="text-sm text-muted-foreground mt-2">
-          Your original DOCX formatting is preserved through semantic XML rewriting.
+          Generates a clean, professionally formatted DOCX with optimized content.
         </p>
       </div>
 
@@ -380,7 +387,7 @@ export function ResumeOptimizer() {
               <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
                 <Loader2 className="w-8 h-8 animate-spin mb-4" />
                 <p>Optimizing your resume...</p>
-                <p className="text-sm">Parsing XML structure and preserving formatting</p>
+                <p className="text-sm">Generating structured data and building professional DOCX</p>
               </div>
             ) : optimizedResume ? (
               <div className="bg-muted/50 rounded-lg p-4 max-h-[500px] overflow-y-auto">
@@ -424,7 +431,9 @@ export function ResumeOptimizer() {
               {showDebugPanel ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </div>
           </div>
-          <CardDescription>View detailed information about XML parsing, AI request, and response</CardDescription>
+          <CardDescription>
+            View detailed information about AI request, structured response, and DOCX generation
+          </CardDescription>
         </CardHeader>
 
         {showDebugPanel && (
@@ -457,7 +466,7 @@ export function ResumeOptimizer() {
 
             {rawResponse && (
               <div>
-                <Label className="text-sm font-medium mb-2 block">Raw Response from Gemini</Label>
+                <Label className="text-sm font-medium mb-2 block">Structured JSON Response from Gemini</Label>
                 <div className="bg-zinc-950 rounded-lg p-4 font-mono text-xs max-h-[300px] overflow-y-auto">
                   <pre className="text-blue-400 whitespace-pre-wrap">{rawResponse}</pre>
                 </div>
