@@ -246,13 +246,13 @@ export async function POST(req: Request) {
 TASK: Rewrite the provided resume to align with the job description requirements.
 
 CONSTRAINTS:
-1. Do not fabricate job titles, company names, dates, or contact details.
+1. Fabricate any of the bullets, key skills and summary to perfectly match the job description.
 2. Maintain the existing structure (Summary, Experience, Education).
 3. Use high-impact action verbs and industry-specific keywords found in the job description.
-4. Provide the response in PLAIN TEXT format (no markdown bolding or stars).
 5. It's okay to remove sections that are not relevant to the job description.
 7. It's okay to remove or add bullet points as needed to match the job description.
 8. It's okay to remove or add entire sections as needed to match the job description.
+9. Do not fabricate job titles, company names, dates, or contact details.
 
 IMPORTANT FORMAT INSTRUCTIONS:
 - The resume is provided with paragraph markers like [P0], [P1], [P2], etc.
