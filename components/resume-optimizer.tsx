@@ -8,7 +8,41 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { FileUp, Loader2, Sparkles, Download, FileText, Briefcase, Key, Eye, EyeOff } from "lucide-react"
+import {
+  FileUp,
+  Loader2,
+  Sparkles,
+  Download,
+  FileText,
+  Briefcase,
+  Key,
+  Eye,
+  EyeOff,
+  Terminal,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react"
+
+interface DebugLog {
+  timestamp: string
+  type: "info" | "success" | "error" | "request" | "response"
+  message: string
+  data?: string
+}
+
+interface OptimizeResponse {
+  optimizedResume?: string
+  error?: string
+  debug?: {
+    prompt: string
+    resumeTextLength: number
+    jobDescriptionLength: number
+    responseLength?: number
+    processingTime?: number
+    model: string
+    extractedResumePreview: string
+  }
+}
 
 export function ResumeOptimizer() {
   const [jobDescription, setJobDescription] = useState("")
@@ -18,16 +52,39 @@ export function ResumeOptimizer() {
   const [error, setError] = useState("")
   const [apiKey, setApiKey] = useState("")
   const [showApiKey, setShowApiKey] = useState(false)
+  const [debugLogs, setDebugLogs] = useState<DebugLog[]>([])
+  const [showDebugPanel, setShowDebugPanel] = useState(true)
+  const [promptSent, setPromptSent] = useState("")
+  const [rawResponse, setRawResponse] = useState("")
+
+  const addLog = (type: DebugLog["type"], message: string, data?: string) => {
+    const timestamp = new Date().toLocaleTimeString("en-US", {
+      hour12: false,
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      fractionalSecondDigits: 3,
+    })
+    setDebugLogs((prev) => [...prev, { timestamp, type, message, data }])
+  }
+
+  const clearLogs = () => {
+    setDebugLogs([])
+    setPromptSent("")
+    setRawResponse("")
+  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
       if (!file.name.endsWith(".docx")) {
         setError("Please upload a .docx file")
+        addLog("error", "Invalid file type", `File "${file.name}" is not a .docx file`)
         return
       }
       setResumeFile(file)
       setError("")
+      addLog("info", "File selected", `Name: ${file.name}, Size: ${(file.size / 1024).toFixed(2)} KB`)
     }
   }
 
@@ -48,6 +105,10 @@ export function ResumeOptimizer() {
     setIsLoading(true)
     setError("")
     setOptimizedResume("")
+    clearLogs()
+
+    addLog("info", "Starting resume optimization...")
+    addLog("info", "Preparing request", `Job description: ${jobDescription.length} chars, File: ${resumeFile.name}`)
 
     try {
       const formData = new FormData()
@@ -55,22 +116,48 @@ export function ResumeOptimizer() {
       formData.append("resume", resumeFile)
       formData.append("apiKey", apiKey)
 
+      addLog("request", "Sending request to /api/optimize-resume")
+      const startTime = Date.now()
+
       const response = await fetch("/api/optimize-resume", {
         method: "POST",
         body: formData,
       })
 
-      const data = await response.json()
+      const elapsed = Date.now() - startTime
+      addLog("info", `Response received in ${elapsed}ms`, `Status: ${response.status} ${response.statusText}`)
+
+      const data: OptimizeResponse = await response.json()
+
+      if (data.debug) {
+        setPromptSent(data.debug.prompt)
+        addLog("info", "Document processed", `Extracted ${data.debug.resumeTextLength} characters from resume`)
+        addLog("info", "Model used", data.debug.model)
+        if (data.debug.processingTime) {
+          addLog("info", "AI processing time", `${data.debug.processingTime}ms`)
+        }
+        if (data.debug.extractedResumePreview) {
+          addLog("info", "Resume preview (first 500 chars)", data.debug.extractedResumePreview)
+        }
+      }
 
       if (!response.ok) {
+        addLog("error", "Request failed", data.error || "Unknown error")
         throw new Error(data.error || "Failed to optimize resume")
       }
 
-      setOptimizedResume(data.optimizedResume)
+      if (data.optimizedResume) {
+        setOptimizedResume(data.optimizedResume)
+        setRawResponse(data.optimizedResume)
+        addLog("success", "Resume optimized successfully", `Output: ${data.optimizedResume.length} characters`)
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An unexpected error occurred")
+      const errorMsg = err instanceof Error ? err.message : "An unexpected error occurred"
+      setError(errorMsg)
+      addLog("error", "Optimization failed", errorMsg)
     } finally {
       setIsLoading(false)
+      addLog("info", "Request completed")
     }
   }
 
@@ -86,8 +173,38 @@ export function ResumeOptimizer() {
     URL.revokeObjectURL(url)
   }
 
+  const getLogColor = (type: DebugLog["type"]) => {
+    switch (type) {
+      case "success":
+        return "text-green-400"
+      case "error":
+        return "text-red-400"
+      case "request":
+        return "text-blue-400"
+      case "response":
+        return "text-purple-400"
+      default:
+        return "text-zinc-400"
+    }
+  }
+
+  const getLogPrefix = (type: DebugLog["type"]) => {
+    switch (type) {
+      case "success":
+        return "[SUCCESS]"
+      case "error":
+        return "[ERROR]"
+      case "request":
+        return "[REQUEST]"
+      case "response":
+        return "[RESPONSE]"
+      default:
+        return "[INFO]"
+    }
+  }
+
   return (
-    <div className="container mx-auto py-8 px-4 max-w-6xl">
+    <div className="container mx-auto py-8 px-4 max-w-7xl">
       <div className="text-center mb-8">
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-4">
           <Sparkles className="w-8 h-8 text-primary" />
@@ -257,6 +374,80 @@ export function ResumeOptimizer() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Debug Output Panel */}
+      <Card className="mt-6">
+        <CardHeader className="cursor-pointer" onClick={() => setShowDebugPanel(!showDebugPanel)}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Terminal className="w-5 h-5" />
+              <CardTitle>Debug Output</CardTitle>
+              <span className="text-xs bg-muted px-2 py-0.5 rounded-full text-muted-foreground">
+                {debugLogs.length} logs
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              {debugLogs.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    clearLogs()
+                  }}
+                  className="text-xs"
+                >
+                  Clear
+                </Button>
+              )}
+              {showDebugPanel ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </div>
+          </div>
+          <CardDescription>View detailed information about the API request and response</CardDescription>
+        </CardHeader>
+
+        {showDebugPanel && (
+          <CardContent className="space-y-4">
+            {/* Log Output */}
+            <div className="bg-zinc-950 rounded-lg p-4 font-mono text-xs max-h-[300px] overflow-y-auto">
+              {debugLogs.length === 0 ? (
+                <p className="text-zinc-500">Logs will appear here when you optimize a resume...</p>
+              ) : (
+                <div className="space-y-1">
+                  {debugLogs.map((log, idx) => (
+                    <div key={idx} className="flex gap-2">
+                      <span className="text-zinc-600 shrink-0">{log.timestamp}</span>
+                      <span className={`shrink-0 ${getLogColor(log.type)}`}>{getLogPrefix(log.type)}</span>
+                      <span className="text-zinc-300">{log.message}</span>
+                      {log.data && <span className="text-zinc-500 break-all">- {log.data}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Prompt Sent */}
+            {promptSent && (
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Prompt Sent to Gemini</Label>
+                <div className="bg-zinc-950 rounded-lg p-4 font-mono text-xs max-h-[300px] overflow-y-auto">
+                  <pre className="text-green-400 whitespace-pre-wrap">{promptSent}</pre>
+                </div>
+              </div>
+            )}
+
+            {/* Raw Response */}
+            {rawResponse && (
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Raw Response from Gemini</Label>
+                <div className="bg-zinc-950 rounded-lg p-4 font-mono text-xs max-h-[300px] overflow-y-auto">
+                  <pre className="text-blue-400 whitespace-pre-wrap">{rawResponse}</pre>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
     </div>
   )
 }

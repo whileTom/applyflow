@@ -6,6 +6,7 @@ export const maxDuration = 60
 
 export async function POST(req: Request) {
   console.log("[API] Resume optimization request received")
+  const requestStartTime = Date.now()
 
   try {
     const formData = await req.formData()
@@ -102,6 +103,8 @@ ORIGINAL RESUME:
 ${resumeText}`
 
     console.log("[API] Calling Google Gemini API...")
+    const aiStartTime = Date.now()
+    const modelName = "gemini-2.5-flash"
 
     try {
       const google = createGoogleGenerativeAI({
@@ -109,49 +112,84 @@ ${resumeText}`
       })
 
       const { text } = await generateText({
-        model: google("gemini-2.5-flash"),
+        model: google(modelName),
         prompt,
-        maxOutputTokens: 4000,
+        maxOutputTokens: 200000,
         temperature: 0.3,
       })
-      console.log(prompt)
-      console.log("[API] Gemini response received. Output length:", text.length, "characters")
 
-      return Response.json({ optimizedResume: text })
+      const aiProcessingTime = Date.now() - aiStartTime
+      const totalProcessingTime = Date.now() - requestStartTime
+
+      console.log("[API] Gemini response received. Output length:", text.length, "characters")
+      console.log("[API] AI processing time:", aiProcessingTime, "ms")
+      console.log("[API] Total request time:", totalProcessingTime, "ms")
+
+      return Response.json({
+        optimizedResume: text,
+        debug: {
+          prompt: prompt,
+          resumeTextLength: resumeText.length,
+          jobDescriptionLength: jobDescription.length,
+          responseLength: text.length,
+          processingTime: aiProcessingTime,
+          totalTime: totalProcessingTime,
+          model: `google/${modelName}`,
+          extractedResumePreview: resumeText.substring(0, 500) + (resumeText.length > 500 ? "..." : ""),
+        },
+      })
     } catch (aiError: unknown) {
       console.log("[API] Gemini API error:", aiError)
 
       const errorMessage = aiError instanceof Error ? aiError.message : String(aiError)
 
+      const debugInfo = {
+        prompt: prompt,
+        resumeTextLength: resumeText.length,
+        jobDescriptionLength: jobDescription.length,
+        model: `google/${modelName}`,
+        extractedResumePreview: resumeText.substring(0, 500) + (resumeText.length > 500 ? "..." : ""),
+        errorDetails: errorMessage,
+      }
+
       if (errorMessage.includes("API_KEY_INVALID") || errorMessage.includes("invalid")) {
         return Response.json(
-          { error: "Invalid API key. Please check your Google Gemini API key and try again." },
+          { error: "Invalid API key. Please check your Google Gemini API key and try again.", debug: debugInfo },
           { status: 401 },
         )
       }
 
       if (errorMessage.includes("quota") || errorMessage.includes("QUOTA_EXCEEDED")) {
         return Response.json(
-          { error: "API quota exceeded. Please check your Google AI Studio usage limits or try again later." },
+          {
+            error: "API quota exceeded. Please check your Google AI Studio usage limits or try again later.",
+            debug: debugInfo,
+          },
           { status: 429 },
         )
       }
 
       if (errorMessage.includes("PERMISSION_DENIED")) {
         return Response.json(
-          { error: "Permission denied. Please ensure your API key has access to the Gemini API." },
+          { error: "Permission denied. Please ensure your API key has access to the Gemini API.", debug: debugInfo },
           { status: 403 },
         )
       }
 
       if (errorMessage.includes("timeout") || errorMessage.includes("DEADLINE_EXCEEDED")) {
         return Response.json(
-          { error: "Request timed out. The resume may be too long. Please try with a shorter document." },
+          {
+            error: "Request timed out. The resume may be too long. Please try with a shorter document.",
+            debug: debugInfo,
+          },
           { status: 504 },
         )
       }
 
-      return Response.json({ error: `AI processing failed: ${errorMessage}. Please try again.` }, { status: 500 })
+      return Response.json(
+        { error: `AI processing failed: ${errorMessage}. Please try again.`, debug: debugInfo },
+        { status: 500 },
+      )
     }
   } catch (error) {
     console.log("[API] Unexpected error:", error)
