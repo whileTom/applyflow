@@ -1,298 +1,175 @@
-import { generateObject } from "ai"
+import { generateText } from "ai"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
-import mammoth from "mammoth"
-import { z } from "zod"
-import { Document, Packer, Paragraph, TextRun, AlignmentType, BorderStyle } from "docx"
+import JSZip from "jszip"
 
 export const maxDuration = 60
 
-export const runtime = "nodejs"
+interface ParagraphMapping {
+  index: number
+  originalText: string
+  xmlPath: string[]
+}
 
-const ResumeSchema = z.object({
-  contactInfo: z.object({
-    name: z.string(),
-    email: z.string().optional(),
-    phone: z.string().optional(),
-    location: z.string().optional(),
-    linkedin: z.string().optional(),
-    website: z.string().optional(),
-  }),
-  summary: z.string().optional(),
-  skills: z.array(z.string()).optional(),
-  experience: z
-    .array(
-      z.object({
-        title: z.string(),
-        company: z.string(),
-        location: z.string().optional(),
-        startDate: z.string(),
-        endDate: z.string(),
-        bullets: z.array(z.string()),
-      }),
-    )
-    .optional(),
-  education: z
-    .array(
-      z.object({
-        degree: z.string(),
-        institution: z.string(),
-        location: z.string().optional(),
-        graduationDate: z.string().optional(),
-        details: z.array(z.string()).optional(),
-      }),
-    )
-    .optional(),
-  certifications: z
-    .array(
-      z.object({
-        name: z.string(),
-        issuer: z.string().optional(),
-        date: z.string().optional(),
-      }),
-    )
-    .optional(),
-  projects: z
-    .array(
-      z.object({
-        name: z.string(),
-        description: z.string().optional(),
-        technologies: z.array(z.string()).optional(),
-        bullets: z.array(z.string()).optional(),
-      }),
-    )
-    .optional(),
-  additionalSections: z
-    .array(
-      z.object({
-        title: z.string(),
-        items: z.array(z.string()),
-      }),
-    )
-    .optional(),
-})
+function extractTextFromXml(xmlContent: string): { text: string; paragraphs: ParagraphMapping[] } {
+  console.log("[API] Parsing document XML structure...")
 
-type ResumeData = z.infer<typeof ResumeSchema>
+  const paragraphs: ParagraphMapping[] = []
+  let fullText = ""
 
-function generateProfessionalDocx(resume: ResumeData): Document {
-  const children: Paragraph[] = []
+  // Match all paragraph elements
+  const paragraphRegex = /<w:p[^>]*>([\s\S]*?)<\/w:p>/g
+  let paragraphMatch
+  let paragraphIndex = 0
 
-  // Helper for section headers
-  const addSectionHeader = (title: string) => {
-    children.push(
-      new Paragraph({
-        children: [new TextRun({ text: title.toUpperCase(), bold: true, size: 24 })],
-        spacing: { before: 300, after: 100 },
-        border: {
-          bottom: { style: BorderStyle.SINGLE, size: 6, color: "000000" },
-        },
-      }),
-    )
-  }
+  while ((paragraphMatch = paragraphRegex.exec(xmlContent)) !== null) {
+    const paragraphContent = paragraphMatch[1]
 
-  // Contact Info - Name as header
-  children.push(
-    new Paragraph({
-      children: [new TextRun({ text: resume.contactInfo.name, bold: true, size: 36 })],
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 100 },
-    }),
-  )
+    // Extract all text runs within the paragraph
+    const textRegex = /<w:t[^>]*>([^<]*)<\/w:t>/g
+    let textMatch
+    let paragraphText = ""
 
-  // Contact details on one line
-  const contactParts: string[] = []
-  if (resume.contactInfo.email) contactParts.push(resume.contactInfo.email)
-  if (resume.contactInfo.phone) contactParts.push(resume.contactInfo.phone)
-  if (resume.contactInfo.location) contactParts.push(resume.contactInfo.location)
-  if (resume.contactInfo.linkedin) contactParts.push(resume.contactInfo.linkedin)
-  if (resume.contactInfo.website) contactParts.push(resume.contactInfo.website)
+    while ((textMatch = textRegex.exec(paragraphContent)) !== null) {
+      paragraphText += textMatch[1]
+    }
 
-  if (contactParts.length > 0) {
-    children.push(
-      new Paragraph({
-        children: [new TextRun({ text: contactParts.join("  |  "), size: 20 })],
-        alignment: AlignmentType.CENTER,
-        spacing: { after: 200 },
-      }),
-    )
-  }
-
-  // Summary
-  if (resume.summary) {
-    addSectionHeader("Professional Summary")
-    children.push(
-      new Paragraph({
-        children: [new TextRun({ text: resume.summary, size: 22 })],
-        spacing: { after: 100 },
-      }),
-    )
-  }
-
-  // Skills - each skill as its own entry
-  if (resume.skills && resume.skills.length > 0) {
-    addSectionHeader("Skills")
-    children.push(
-      new Paragraph({
-        children: [new TextRun({ text: resume.skills.join("  •  "), size: 22 })],
-        spacing: { after: 100 },
-      }),
-    )
-  }
-
-  // Experience
-  if (resume.experience && resume.experience.length > 0) {
-    addSectionHeader("Professional Experience")
-    for (const job of resume.experience) {
-      // Job title and company
-      children.push(
-        new Paragraph({
-          children: [
-            new TextRun({ text: job.title, bold: true, size: 22 }),
-            new TextRun({ text: "  |  ", size: 22 }),
-            new TextRun({ text: job.company, italics: true, size: 22 }),
-            ...(job.location ? [new TextRun({ text: `  |  ${job.location}`, size: 22 })] : []),
-          ],
-          spacing: { before: 150, after: 50 },
-        }),
-      )
-      // Dates
-      children.push(
-        new Paragraph({
-          children: [new TextRun({ text: `${job.startDate} - ${job.endDate}`, size: 20, italics: true })],
-          spacing: { after: 50 },
-        }),
-      )
-      // Bullets
-      for (const bullet of job.bullets) {
-        children.push(
-          new Paragraph({
-            children: [new TextRun({ text: `•  ${bullet}`, size: 22 })],
-            indent: { left: 360 },
-            spacing: { after: 30 },
-          }),
-        )
-      }
+    if (paragraphText.trim()) {
+      paragraphs.push({
+        index: paragraphIndex,
+        originalText: paragraphText,
+        xmlPath: [paragraphMatch.index.toString()],
+      })
+      fullText += `[P${paragraphIndex}] ${paragraphText}\n`
+      paragraphIndex++
     }
   }
 
-  // Education
-  if (resume.education && resume.education.length > 0) {
-    addSectionHeader("Education")
-    for (const edu of resume.education) {
-      children.push(
-        new Paragraph({
-          children: [
-            new TextRun({ text: edu.degree, bold: true, size: 22 }),
-            new TextRun({ text: "  |  ", size: 22 }),
-            new TextRun({ text: edu.institution, italics: true, size: 22 }),
-            ...(edu.location ? [new TextRun({ text: `  |  ${edu.location}`, size: 22 })] : []),
-          ],
-          spacing: { before: 150, after: 50 },
-        }),
-      )
-      if (edu.graduationDate) {
-        children.push(
-          new Paragraph({
-            children: [new TextRun({ text: edu.graduationDate, size: 20, italics: true })],
-            spacing: { after: 50 },
-          }),
-        )
+  console.log(`[API] Extracted ${paragraphs.length} paragraphs from document`)
+  return { text: fullText, paragraphs }
+}
+
+function replaceTextInXml(xmlContent: string, originalParagraphs: ParagraphMapping[], newText: string): string {
+  console.log("[API] Mapping AI response back to XML structure...")
+
+  // Parse the AI response to extract paragraph mappings
+  const newParagraphMap = new Map<number, string>()
+  const lines = newText.split("\n")
+
+  for (const line of lines) {
+    const match = line.match(/^\[P(\d+)\]\s*(.*)$/)
+    if (match) {
+      const idx = Number.parseInt(match[1], 10)
+      const text = match[2]
+      newParagraphMap.set(idx, text)
+    }
+  }
+
+  console.log(`[API] Parsed ${newParagraphMap.size} paragraph replacements from AI response`)
+
+  let modifiedXml = xmlContent
+  const offset = 0
+
+  const paragraphRegex = /<w:p[^>]*>([\s\S]*?)<\/w:p>/g
+  let paragraphMatch
+  let currentParagraphIndex = 0
+
+  const replacements: { start: number; end: number; newContent: string }[] = []
+
+  while ((paragraphMatch = paragraphRegex.exec(xmlContent)) !== null) {
+    const paragraphContent = paragraphMatch[1]
+    const paragraphStart = paragraphMatch.index
+    const paragraphEnd = paragraphStart + paragraphMatch[0].length
+
+    // Check if this paragraph has text
+    const textRegex = /<w:t[^>]*>([^<]*)<\/w:t>/g
+    let hasText = false
+    let textMatch
+
+    while ((textMatch = textRegex.exec(paragraphContent)) !== null) {
+      if (textMatch[1].trim()) {
+        hasText = true
+        break
       }
-      if (edu.details) {
-        for (const detail of edu.details) {
-          children.push(
-            new Paragraph({
-              children: [new TextRun({ text: `•  ${detail}`, size: 22 })],
-              indent: { left: 360 },
-              spacing: { after: 30 },
-            }),
-          )
+    }
+
+    if (hasText) {
+      const newTextForParagraph = newParagraphMap.get(currentParagraphIndex)
+
+      if (newTextForParagraph !== undefined) {
+        // Replace all text runs in this paragraph with the new text
+        // Keep the first text run's formatting and put all text there
+        let newParagraphContent = paragraphContent
+        let isFirstTextRun = true
+        const runOffset = 0
+
+        const runRegex = /<w:r>([\s\S]*?)<\/w:r>/g
+        let runMatch
+        const runReplacements: { start: number; end: number; newContent: string }[] = []
+
+        while ((runMatch = runRegex.exec(paragraphContent)) !== null) {
+          const runContent = runMatch[1]
+          const hasTextInRun = /<w:t[^>]*>([^<]*)<\/w:t>/.test(runContent)
+
+          if (hasTextInRun) {
+            if (isFirstTextRun) {
+              // Replace text in the first run with all the new text
+              const newRunContent = runContent.replace(
+                /<w:t([^>]*)>[^<]*<\/w:t>/,
+                `<w:t$1>${escapeXml(newTextForParagraph)}</w:t>`,
+              )
+              runReplacements.push({
+                start: runMatch.index,
+                end: runMatch.index + runMatch[0].length,
+                newContent: `<w:r>${newRunContent}</w:r>`,
+              })
+              isFirstTextRun = false
+            } else {
+              // Remove subsequent text runs (consolidate text into first run)
+              runReplacements.push({
+                start: runMatch.index,
+                end: runMatch.index + runMatch[0].length,
+                newContent: "",
+              })
+            }
+          }
         }
-      }
-    }
-  }
 
-  // Certifications
-  if (resume.certifications && resume.certifications.length > 0) {
-    addSectionHeader("Certifications")
-    for (const cert of resume.certifications) {
-      const certParts = [cert.name]
-      if (cert.issuer) certParts.push(cert.issuer)
-      if (cert.date) certParts.push(cert.date)
-      children.push(
-        new Paragraph({
-          children: [new TextRun({ text: `•  ${certParts.join("  |  ")}`, size: 22 })],
-          indent: { left: 360 },
-          spacing: { after: 30 },
-        }),
-      )
-    }
-  }
-
-  // Projects
-  if (resume.projects && resume.projects.length > 0) {
-    addSectionHeader("Projects")
-    for (const project of resume.projects) {
-      children.push(
-        new Paragraph({
-          children: [
-            new TextRun({ text: project.name, bold: true, size: 22 }),
-            ...(project.technologies && project.technologies.length > 0
-              ? [new TextRun({ text: `  (${project.technologies.join(", ")})`, italics: true, size: 20 })]
-              : []),
-          ],
-          spacing: { before: 150, after: 50 },
-        }),
-      )
-      if (project.description) {
-        children.push(
-          new Paragraph({
-            children: [new TextRun({ text: project.description, size: 22 })],
-            spacing: { after: 50 },
-          }),
-        )
-      }
-      if (project.bullets) {
-        for (const bullet of project.bullets) {
-          children.push(
-            new Paragraph({
-              children: [new TextRun({ text: `•  ${bullet}`, size: 22 })],
-              indent: { left: 360 },
-              spacing: { after: 30 },
-            }),
-          )
+        // Apply run replacements in reverse order to maintain positions
+        for (let i = runReplacements.length - 1; i >= 0; i--) {
+          const rep = runReplacements[i]
+          newParagraphContent =
+            newParagraphContent.substring(0, rep.start) + rep.newContent + newParagraphContent.substring(rep.end)
         }
+
+        const fullParagraphTag = paragraphMatch[0].replace(paragraphContent, newParagraphContent)
+        replacements.push({
+          start: paragraphStart,
+          end: paragraphEnd,
+          newContent: fullParagraphTag,
+        })
       }
+
+      currentParagraphIndex++
     }
   }
 
-  // Additional sections
-  if (resume.additionalSections && resume.additionalSections.length > 0) {
-    for (const section of resume.additionalSections) {
-      addSectionHeader(section.title)
-      for (const item of section.items) {
-        children.push(
-          new Paragraph({
-            children: [new TextRun({ text: `•  ${item}`, size: 22 })],
-            indent: { left: 360 },
-            spacing: { after: 30 },
-          }),
-        )
-      }
-    }
+  // Apply all replacements in reverse order
+  for (let i = replacements.length - 1; i >= 0; i--) {
+    const rep = replacements[i]
+    modifiedXml = modifiedXml.substring(0, rep.start) + rep.newContent + modifiedXml.substring(rep.end)
   }
 
-  return new Document({
-    sections: [
-      {
-        properties: {
-          page: {
-            margin: { top: 720, right: 720, bottom: 720, left: 720 },
-          },
-        },
-        children,
-      },
-    ],
-  })
+  console.log(`[API] Applied ${replacements.length} paragraph replacements to XML`)
+  return modifiedXml
+}
+
+function escapeXml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;")
 }
 
 export async function POST(req: Request) {
@@ -305,7 +182,6 @@ export async function POST(req: Request) {
     const resumeFile = formData.get("resume") as File
     const apiKey = formData.get("apiKey") as string
 
-    // Validation
     if (!apiKey || !apiKey.trim()) {
       console.log("[API] Error: Missing API key")
       return Response.json({ error: "Google Gemini API key is required. Please enter your API key." }, { status: 400 })
@@ -327,170 +203,130 @@ export async function POST(req: Request) {
       )
     }
 
-    console.log("[API] File received:", {
-      name: resumeFile.name,
-      size: resumeFile.size,
-      type: resumeFile.type,
-    })
-
-    const validTypes = [
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "application/octet-stream", // Some browsers send this
-    ]
-    const isValidExtension = resumeFile.name.toLowerCase().endsWith(".docx")
-
-    if (!isValidExtension) {
-      console.log("[API] Error: Invalid file extension")
-      return Response.json(
-        {
-          error: `Invalid file type. Expected a .docx file but received "${resumeFile.name}". Please upload a Microsoft Word document (.docx format).`,
-          debug: { fileName: resumeFile.name, fileType: resumeFile.type, fileSize: resumeFile.size },
-        },
-        { status: 400 },
-      )
-    }
-
-    // Extract text from DOCX using mammoth
-    let resumeText: string
-    try {
-      console.log("[API] Converting file to Buffer...")
-      const arrayBuffer = await resumeFile.arrayBuffer()
-      const buffer = Buffer.from(arrayBuffer)
-      console.log("[API] Buffer size:", buffer.length, "bytes")
-
-      if (buffer.length === 0) {
-        console.log("[API] Error: Empty file")
-        return Response.json(
-          { error: "The uploaded file is empty. Please upload a valid .docx file with content." },
-          { status: 400 },
-        )
-      }
-
-      console.log("[API] Extracting text with mammoth...")
-      const result = await mammoth.extractRawText({ buffer })
-      resumeText = result.value
-
-      if (result.messages && result.messages.length > 0) {
-        console.log("[API] Mammoth warnings:", result.messages)
-      }
-
-      console.log("[API] Extracted text length:", resumeText.length, "characters")
-      console.log("[API] First 200 chars:", resumeText.substring(0, 200))
-    } catch (parseError: unknown) {
-      const errorMessage = parseError instanceof Error ? parseError.message : String(parseError)
-      const errorStack = parseError instanceof Error ? parseError.stack : undefined
-
-      console.log("[API] DOCX parse error details:", {
-        message: errorMessage,
-        stack: errorStack,
-        fileName: resumeFile.name,
-        fileSize: resumeFile.size,
-        fileType: resumeFile.type,
-      })
-
-      return Response.json(
-        {
-          error: `Failed to parse the DOCX file: ${errorMessage}. Please ensure it's a valid .docx file created in Microsoft Word or Google Docs (exported as .docx).`,
-          debug: {
-            parseError: errorMessage,
-            fileName: resumeFile.name,
-            fileType: resumeFile.type,
-            fileSize: resumeFile.size,
-          },
-        },
-        { status: 400 },
-      )
-    }
-
     console.log("[API] Inputs validated. File:", resumeFile.name, "Size:", resumeFile.size, "bytes")
+
+    let zip: JSZip
+    let documentXml: string
+
+    try {
+      const arrayBuffer = await resumeFile.arrayBuffer()
+      zip = await JSZip.loadAsync(arrayBuffer)
+      console.log("[API] DOCX ZIP structure loaded successfully")
+
+      const documentFile = zip.file("word/document.xml")
+      if (!documentFile) {
+        throw new Error("No document.xml found in DOCX")
+      }
+
+      documentXml = await documentFile.async("string")
+      console.log("[API] Extracted document.xml, size:", documentXml.length, "characters")
+    } catch (zipError) {
+      console.log("[API] Error parsing DOCX structure:", zipError)
+      return Response.json(
+        { error: "Failed to parse the DOCX file structure. Please ensure it's a valid .docx file." },
+        { status: 400 },
+      )
+    }
+
+    const { text: resumeText, paragraphs } = extractTextFromXml(documentXml)
 
     if (!resumeText.trim()) {
       console.log("[API] Error: Extracted text is empty")
       return Response.json(
-        { error: "The uploaded document appears to be empty or contains no extractable text." },
+        {
+          error:
+            "The uploaded document appears to be empty or contains no extractable text. Please check your file and try again.",
+        },
         { status: 400 },
       )
     }
 
     const prompt = `ROLE: Professional Resume Optimizer
 
-TASK: Analyze the provided resume and job description, then return an optimized resume as structured JSON data.
+TASK: Rewrite the provided resume to align with the job description requirements.
 
 CONSTRAINTS:
 1. Do not fabricate job titles, company names, dates, or contact details.
-2. Use high-impact action verbs and industry-specific keywords from the job description.
-3. It's okay to remove sections not relevant to the job description.
-4. It's okay to add, remove, or modify bullet points to better match the job description.
-5. It's okay to add relevant certifications, projects, or skills sections if they would strengthen the application.
-6. Each skill in the skills array should be a SINGLE skill/technology (e.g., "Python", "Project Management", "AWS").
-7. Make bullet points concise, achievement-focused, and quantified where possible.
-8. Ensure the resume is cohesive, professional, and error-free.
+2. Maintain the existing structure (Summary, Experience, Education).
+3. Use high-impact action verbs and industry-specific keywords found in the job description.
+4. Provide the response in PLAIN TEXT format (no markdown bolding or stars).
+5. It's okay to remove sections that are not relevant to the job description.
+7. It's okay to remove or add bullet points as needed to match the job description.
+8. It's okay to remove or add entire sections as needed to match the job description.
+
+IMPORTANT FORMAT INSTRUCTIONS:
+- The resume is provided with paragraph markers like [P0], [P1], [P2], etc.
+- You MUST preserve these exact markers in your response.
+- Rewrite the text after each marker, but keep the marker format exactly as [P#].
+- If you want to remove a paragraph, still include the marker with empty text: [P#] 
+- Do NOT add new paragraph markers or change the numbering.
 
 JOB DESCRIPTION:
 ${jobDescription}
 
-ORIGINAL RESUME:
-${resumeText}
+ORIGINAL RESUME (with paragraph markers):
+${resumeText}`
 
-Return the optimized resume as structured JSON matching the schema. Ensure all text is clean, professional, and free of special character issues.`
-
-    console.log("[API] Calling Google Gemini API for structured output...")
+    console.log("[API] Calling Google Gemini API with paragraph-aware prompt...")
     const aiStartTime = Date.now()
     const modelName = "gemini-2.5-flash"
 
     try {
-      const google = createGoogleGenerativeAI({ apiKey })
+      const google = createGoogleGenerativeAI({
+        apiKey: apiKey,
+      })
 
-      const { object: resumeData } = await generateObject({
+      const { text: aiResponse } = await generateText({
         model: google(modelName),
-        schema: ResumeSchema,
         prompt,
+        maxOutputTokens: 200000,
         temperature: 0.3,
       })
 
       const aiProcessingTime = Date.now() - aiStartTime
-      console.log("[API] Gemini returned structured resume data")
+      console.log("[API] Gemini response received. Output length:", aiResponse.length, "characters")
       console.log("[API] AI processing time:", aiProcessingTime, "ms")
 
-      // Generate DOCX from structured data
-      console.log("[API] Generating professional DOCX document...")
-      const doc = generateProfessionalDocx(resumeData)
-      const docxBuffer = await Packer.toBuffer(doc)
-      const docxBase64 = Buffer.from(docxBuffer).toString("base64")
+      const modifiedXml = replaceTextInXml(documentXml, paragraphs, aiResponse)
+
+      zip.file("word/document.xml", modifiedXml)
+
+      const newDocxBuffer = await zip.generateAsync({
+        type: "base64",
+        compression: "DEFLATE",
+        compressionOptions: { level: 9 },
+      })
 
       const totalProcessingTime = Date.now() - requestStartTime
-      console.log("[API] DOCX generated successfully, size:", docxBuffer.length, "bytes")
-      console.log("[API] Total processing time:", totalProcessingTime, "ms")
-
-      // Format for display
-      const displayText = formatResumeForDisplay(resumeData)
+      console.log("[API] New DOCX generated successfully")
+      console.log("[API] Total request time:", totalProcessingTime, "ms")
 
       return Response.json({
-        optimizedResume: displayText,
-        docxBase64,
-        structuredData: resumeData,
+        optimizedResume: aiResponse,
+        docxBase64: newDocxBuffer,
         debug: {
-          prompt,
+          prompt: prompt,
           resumeTextLength: resumeText.length,
           jobDescriptionLength: jobDescription.length,
-          responseLength: displayText.length,
+          responseLength: aiResponse.length,
           processingTime: aiProcessingTime,
           totalTime: totalProcessingTime,
           model: `google/${modelName}`,
+          paragraphCount: paragraphs.length,
           extractedResumePreview: resumeText.substring(0, 500) + (resumeText.length > 500 ? "..." : ""),
-          skillsCount: resumeData.skills?.length || 0,
-          experienceCount: resumeData.experience?.length || 0,
         },
       })
     } catch (aiError: unknown) {
       console.log("[API] Gemini API error:", aiError)
+
       const errorMessage = aiError instanceof Error ? aiError.message : String(aiError)
 
       const debugInfo = {
-        prompt,
+        prompt: prompt,
         resumeTextLength: resumeText.length,
         jobDescriptionLength: jobDescription.length,
         model: `google/${modelName}`,
+        paragraphCount: paragraphs.length,
         extractedResumePreview: resumeText.substring(0, 500) + (resumeText.length > 500 ? "..." : ""),
         errorDetails: errorMessage,
       }
@@ -519,112 +355,24 @@ Return the optimized resume as structured JSON matching the schema. Ensure all t
         )
       }
 
+      if (errorMessage.includes("timeout") || errorMessage.includes("DEADLINE_EXCEEDED")) {
+        return Response.json(
+          {
+            error: "Request timed out. The resume may be too long. Please try with a shorter document.",
+            debug: debugInfo,
+          },
+          { status: 504 },
+        )
+      }
+
       return Response.json(
         { error: `AI processing failed: ${errorMessage}. Please try again.`, debug: debugInfo },
         { status: 500 },
       )
     }
   } catch (error) {
+    console.log("[API] Unexpected error:", error)
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
-    const errorStack = error instanceof Error ? error.stack : undefined
-    console.log("[API] Unexpected error:", { message: errorMessage, stack: errorStack })
-    return Response.json(
-      {
-        error: `An unexpected error occurred: ${errorMessage}. Please try again.`,
-        debug: { errorMessage, errorStack },
-      },
-      { status: 500 },
-    )
+    return Response.json({ error: `An unexpected error occurred: ${errorMessage}. Please try again.` }, { status: 500 })
   }
-}
-
-// Helper to format resume data for display
-function formatResumeForDisplay(resume: ResumeData): string {
-  const lines: string[] = []
-
-  lines.push(resume.contactInfo.name)
-  const contact = [
-    resume.contactInfo.email,
-    resume.contactInfo.phone,
-    resume.contactInfo.location,
-    resume.contactInfo.linkedin,
-    resume.contactInfo.website,
-  ]
-    .filter(Boolean)
-    .join(" | ")
-  if (contact) lines.push(contact)
-  lines.push("")
-
-  if (resume.summary) {
-    lines.push("PROFESSIONAL SUMMARY")
-    lines.push(resume.summary)
-    lines.push("")
-  }
-
-  if (resume.skills && resume.skills.length > 0) {
-    lines.push("SKILLS")
-    lines.push(resume.skills.join(" • "))
-    lines.push("")
-  }
-
-  if (resume.experience && resume.experience.length > 0) {
-    lines.push("PROFESSIONAL EXPERIENCE")
-    for (const job of resume.experience) {
-      lines.push(`${job.title} | ${job.company}${job.location ? ` | ${job.location}` : ""}`)
-      lines.push(`${job.startDate} - ${job.endDate}`)
-      for (const bullet of job.bullets) {
-        lines.push(`• ${bullet}`)
-      }
-      lines.push("")
-    }
-  }
-
-  if (resume.education && resume.education.length > 0) {
-    lines.push("EDUCATION")
-    for (const edu of resume.education) {
-      lines.push(`${edu.degree} | ${edu.institution}${edu.location ? ` | ${edu.location}` : ""}`)
-      if (edu.graduationDate) lines.push(edu.graduationDate)
-      if (edu.details) {
-        for (const detail of edu.details) {
-          lines.push(`• ${detail}`)
-        }
-      }
-      lines.push("")
-    }
-  }
-
-  if (resume.certifications && resume.certifications.length > 0) {
-    lines.push("CERTIFICATIONS")
-    for (const cert of resume.certifications) {
-      const parts = [cert.name, cert.issuer, cert.date].filter(Boolean)
-      lines.push(`• ${parts.join(" | ")}`)
-    }
-    lines.push("")
-  }
-
-  if (resume.projects && resume.projects.length > 0) {
-    lines.push("PROJECTS")
-    for (const project of resume.projects) {
-      lines.push(`${project.name}${project.technologies ? ` (${project.technologies.join(", ")})` : ""}`)
-      if (project.description) lines.push(project.description)
-      if (project.bullets) {
-        for (const bullet of project.bullets) {
-          lines.push(`• ${bullet}`)
-        }
-      }
-      lines.push("")
-    }
-  }
-
-  if (resume.additionalSections) {
-    for (const section of resume.additionalSections) {
-      lines.push(section.title.toUpperCase())
-      for (const item of section.items) {
-        lines.push(`• ${item}`)
-      }
-      lines.push("")
-    }
-  }
-
-  return lines.join("\n")
 }
