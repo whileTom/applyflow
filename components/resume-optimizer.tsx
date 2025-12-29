@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { FileUp, Loader2, Sparkles, Download, FileText, Briefcase } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { FileUp, Loader2, Sparkles, Download, FileText, Briefcase, Key, Eye, EyeOff } from "lucide-react"
 
 export function ResumeOptimizer() {
   const [jobDescription, setJobDescription] = useState("")
@@ -15,6 +16,8 @@ export function ResumeOptimizer() {
   const [optimizedResume, setOptimizedResume] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const [apiKey, setApiKey] = useState("")
+  const [showApiKey, setShowApiKey] = useState(false)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -29,6 +32,10 @@ export function ResumeOptimizer() {
   }
 
   const handleOptimize = async () => {
+    if (!apiKey.trim()) {
+      setError("Please enter your Google Gemini API key")
+      return
+    }
     if (!jobDescription.trim()) {
       setError("Please enter a job description")
       return
@@ -46,21 +53,22 @@ export function ResumeOptimizer() {
       const formData = new FormData()
       formData.append("jobDescription", jobDescription)
       formData.append("resume", resumeFile)
+      formData.append("apiKey", apiKey)
 
       const response = await fetch("/api/optimize-resume", {
         method: "POST",
         body: formData,
       })
 
+      const data = await response.json()
+
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to optimize resume")
+        throw new Error(data.error || "Failed to optimize resume")
       }
 
-      const data = await response.json()
       setOptimizedResume(data.optimizedResume)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred")
+      setError(err instanceof Error ? err.message : "An unexpected error occurred")
     } finally {
       setIsLoading(false)
     }
@@ -90,6 +98,51 @@ export function ResumeOptimizer() {
           get started.
         </p>
       </div>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Key className="w-5 h-5" />
+            Google Gemini API Key
+          </CardTitle>
+          <CardDescription>
+            Enter your Google Gemini API key. Get one at{" "}
+            <a
+              href="https://aistudio.google.com/apikey"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary underline underline-offset-2 hover:text-primary/80"
+            >
+              Google AI Studio
+            </a>
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="relative">
+            <Input
+              type={showApiKey ? "text" : "password"}
+              placeholder="Enter your API key..."
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              className="pr-10"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+              onClick={() => setShowApiKey(!showApiKey)}
+            >
+              {showApiKey ? (
+                <EyeOff className="w-4 h-4 text-muted-foreground" />
+              ) : (
+                <Eye className="w-4 h-4 text-muted-foreground" />
+              )}
+              <span className="sr-only">{showApiKey ? "Hide" : "Show"} API key</span>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Input Section */}
@@ -146,7 +199,7 @@ export function ResumeOptimizer() {
 
                 <Button
                   onClick={handleOptimize}
-                  disabled={isLoading || !jobDescription.trim() || !resumeFile}
+                  disabled={isLoading || !jobDescription.trim() || !resumeFile || !apiKey.trim()}
                   className="w-full"
                   size="lg"
                 >
