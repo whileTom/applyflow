@@ -325,22 +325,81 @@ export async function POST(req: Request) {
       )
     }
 
-    console.log("[API] Inputs validated. File:", resumeFile.name, "Size:", resumeFile.size, "bytes")
+    console.log("[API] File received:", {
+      name: resumeFile.name,
+      size: resumeFile.size,
+      type: resumeFile.type,
+    })
+
+    const validTypes = [
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/octet-stream", // Some browsers send this
+    ]
+    const isValidExtension = resumeFile.name.toLowerCase().endsWith(".docx")
+
+    if (!isValidExtension) {
+      console.log("[API] Error: Invalid file extension")
+      return Response.json(
+        {
+          error: `Invalid file type. Expected a .docx file but received "${resumeFile.name}". Please upload a Microsoft Word document (.docx format).`,
+          debug: { fileName: resumeFile.name, fileType: resumeFile.type, fileSize: resumeFile.size },
+        },
+        { status: 400 },
+      )
+    }
 
     // Extract text from DOCX using mammoth
     let resumeText: string
     try {
+      console.log("[API] Converting file to ArrayBuffer...")
       const arrayBuffer = await resumeFile.arrayBuffer()
+      console.log("[API] ArrayBuffer size:", arrayBuffer.byteLength, "bytes")
+
+      if (arrayBuffer.byteLength === 0) {
+        console.log("[API] Error: Empty file")
+        return Response.json(
+          { error: "The uploaded file is empty. Please upload a valid .docx file with content." },
+          { status: 400 },
+        )
+      }
+
+      console.log("[API] Extracting text with mammoth...")
       const result = await mammoth.extractRawText({ arrayBuffer })
       resumeText = result.value
-      console.log("[API] Extracted text from DOCX:", resumeText.length, "characters")
-    } catch (parseError) {
-      console.log("[API] Error parsing DOCX:", parseError)
+
+      if (result.messages && result.messages.length > 0) {
+        console.log("[API] Mammoth warnings:", result.messages)
+      }
+
+      console.log("[API] Extracted text length:", resumeText.length, "characters")
+      console.log("[API] First 200 chars:", resumeText.substring(0, 200))
+    } catch (parseError: unknown) {
+      const errorMessage = parseError instanceof Error ? parseError.message : String(parseError)
+      const errorStack = parseError instanceof Error ? parseError.stack : undefined
+
+      console.log("[API] DOCX parse error details:", {
+        message: errorMessage,
+        stack: errorStack,
+        fileName: resumeFile.name,
+        fileSize: resumeFile.size,
+        fileType: resumeFile.type,
+      })
+
       return Response.json(
-        { error: "Failed to parse the DOCX file. Please ensure it's a valid .docx file." },
+        {
+          error: `Failed to parse the DOCX file: ${errorMessage}. Please ensure it's a valid .docx file created in Microsoft Word or Google Docs (exported as .docx).`,
+          debug: {
+            parseError: errorMessage,
+            fileName: resumeFile.name,
+            fileType: resumeFile.type,
+            fileSize: resumeFile.size,
+          },
+        },
         { status: 400 },
       )
     }
+
+    console.log("[API] Inputs validated. File:", resumeFile.name, "Size:", resumeFile.size, "bytes")
 
     if (!resumeText.trim()) {
       console.log("[API] Error: Extracted text is empty")
@@ -463,9 +522,16 @@ Return the optimized resume as structured JSON matching the schema. Ensure all t
       )
     }
   } catch (error) {
-    console.log("[API] Unexpected error:", error)
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
-    return Response.json({ error: `An unexpected error occurred: ${errorMessage}. Please try again.` }, { status: 500 })
+    const errorStack = error instanceof Error ? error.stack : undefined
+    console.log("[API] Unexpected error:", { message: errorMessage, stack: errorStack })
+    return Response.json(
+      {
+        error: `An unexpected error occurred: ${errorMessage}. Please try again.`,
+        debug: { errorMessage, errorStack },
+      },
+      { status: 500 },
+    )
   }
 }
 
