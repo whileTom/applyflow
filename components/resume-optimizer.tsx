@@ -32,6 +32,7 @@ interface DebugLog {
 
 interface OptimizeResponse {
   optimizedResume?: string
+  docxBase64?: string
   error?: string
   debug?: {
     prompt: string
@@ -40,6 +41,7 @@ interface OptimizeResponse {
     responseLength?: number
     processingTime?: number
     model: string
+    paragraphCount?: number
     extractedResumePreview: string
   }
 }
@@ -48,6 +50,7 @@ export function ResumeOptimizer() {
   const [jobDescription, setJobDescription] = useState("")
   const [resumeFile, setResumeFile] = useState<File | null>(null)
   const [optimizedResume, setOptimizedResume] = useState("")
+  const [docxBlob, setDocxBlob] = useState<Blob | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [apiKey, setApiKey] = useState("")
@@ -105,6 +108,7 @@ export function ResumeOptimizer() {
     setIsLoading(true)
     setError("")
     setOptimizedResume("")
+    setDocxBlob(null)
     clearLogs()
 
     addLog("info", "Starting resume optimization...")
@@ -117,6 +121,7 @@ export function ResumeOptimizer() {
       formData.append("apiKey", apiKey)
 
       addLog("request", "Sending request to /api/optimize-resume")
+      addLog("info", "Parsing DOCX XML structure for semantic rewrite...")
       const startTime = Date.now()
 
       const response = await fetch("/api/optimize-resume", {
@@ -131,7 +136,8 @@ export function ResumeOptimizer() {
 
       if (data.debug) {
         setPromptSent(data.debug.prompt)
-        addLog("info", "Document processed", `Extracted ${data.debug.resumeTextLength} characters from resume`)
+        addLog("info", "Document XML parsed", `Extracted ${data.debug.paragraphCount || 0} paragraphs`)
+        addLog("info", "Text extracted", `${data.debug.resumeTextLength} characters from resume`)
         addLog("info", "Model used", data.debug.model)
         if (data.debug.processingTime) {
           addLog("info", "AI processing time", `${data.debug.processingTime}ms`)
@@ -149,7 +155,21 @@ export function ResumeOptimizer() {
       if (data.optimizedResume) {
         setOptimizedResume(data.optimizedResume)
         setRawResponse(data.optimizedResume)
-        addLog("success", "Resume optimized successfully", `Output: ${data.optimizedResume.length} characters`)
+        addLog("success", "AI rewrite completed", `Output: ${data.optimizedResume.length} characters`)
+      }
+
+      if (data.docxBase64) {
+        const binaryString = atob(data.docxBase64)
+        const bytes = new Uint8Array(binaryString.length)
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i)
+        }
+        const blob = new Blob([bytes], {
+          type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        })
+        setDocxBlob(blob)
+        addLog("success", "DOCX generated", `Preserved formatting in ${(blob.size / 1024).toFixed(2)} KB file`)
+        addLog("info", "Semantic rewrite complete - formatting preserved from original document")
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "An unexpected error occurred"
@@ -162,11 +182,12 @@ export function ResumeOptimizer() {
   }
 
   const handleDownload = () => {
-    const blob = new Blob([optimizedResume], { type: "text/plain" })
-    const url = URL.createObjectURL(blob)
+    if (!docxBlob) return
+
+    const url = URL.createObjectURL(docxBlob)
     const a = document.createElement("a")
     a.href = url
-    a.download = "optimized-resume.txt"
+    a.download = `optimized-resume-${new Date().toISOString().split("T")[0]}.docx`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -213,6 +234,9 @@ export function ResumeOptimizer() {
         <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
           Tailor your resume to match any job description using AI. Upload your resume and paste the job description to
           get started.
+        </p>
+        <p className="text-sm text-muted-foreground mt-2">
+          Your original DOCX formatting is preserved through semantic XML rewriting.
         </p>
       </div>
 
@@ -262,7 +286,6 @@ export function ResumeOptimizer() {
       </Card>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* Input Section */}
         <div className="space-y-6">
           <Card>
             <CardHeader>
@@ -337,7 +360,6 @@ export function ResumeOptimizer() {
           </Card>
         </div>
 
-        {/* Output Section */}
         <Card className="h-fit">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -345,10 +367,10 @@ export function ResumeOptimizer() {
                 <CardTitle>Optimized Resume</CardTitle>
                 <CardDescription>Your AI-optimized resume will appear here</CardDescription>
               </div>
-              {optimizedResume && (
+              {docxBlob && (
                 <Button variant="outline" size="sm" onClick={handleDownload}>
                   <Download className="w-4 h-4 mr-2" />
-                  Download
+                  Download DOCX
                 </Button>
               )}
             </div>
@@ -358,7 +380,7 @@ export function ResumeOptimizer() {
               <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
                 <Loader2 className="w-8 h-8 animate-spin mb-4" />
                 <p>Optimizing your resume...</p>
-                <p className="text-sm">This may take a moment</p>
+                <p className="text-sm">Parsing XML structure and preserving formatting</p>
               </div>
             ) : optimizedResume ? (
               <div className="bg-muted/50 rounded-lg p-4 max-h-[500px] overflow-y-auto">
@@ -375,7 +397,6 @@ export function ResumeOptimizer() {
         </Card>
       </div>
 
-      {/* Debug Output Panel */}
       <Card className="mt-6">
         <CardHeader className="cursor-pointer" onClick={() => setShowDebugPanel(!showDebugPanel)}>
           <div className="flex items-center justify-between">
@@ -403,12 +424,11 @@ export function ResumeOptimizer() {
               {showDebugPanel ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </div>
           </div>
-          <CardDescription>View detailed information about the API request and response</CardDescription>
+          <CardDescription>View detailed information about XML parsing, AI request, and response</CardDescription>
         </CardHeader>
 
         {showDebugPanel && (
           <CardContent className="space-y-4">
-            {/* Log Output */}
             <div className="bg-zinc-950 rounded-lg p-4 font-mono text-xs max-h-[300px] overflow-y-auto">
               {debugLogs.length === 0 ? (
                 <p className="text-zinc-500">Logs will appear here when you optimize a resume...</p>
@@ -426,7 +446,6 @@ export function ResumeOptimizer() {
               )}
             </div>
 
-            {/* Prompt Sent */}
             {promptSent && (
               <div>
                 <Label className="text-sm font-medium mb-2 block">Prompt Sent to Gemini</Label>
@@ -436,7 +455,6 @@ export function ResumeOptimizer() {
               </div>
             )}
 
-            {/* Raw Response */}
             {rawResponse && (
               <div>
                 <Label className="text-sm font-medium mb-2 block">Raw Response from Gemini</Label>
