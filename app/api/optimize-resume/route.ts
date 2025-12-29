@@ -6,6 +6,8 @@ import { Document, Packer, Paragraph, TextRun, AlignmentType, BorderStyle } from
 
 export const maxDuration = 60
 
+export const runtime = "nodejs"
+
 const ResumeSchema = z.object({
   contactInfo: z.object({
     name: z.string(),
@@ -351,11 +353,12 @@ export async function POST(req: Request) {
     // Extract text from DOCX using mammoth
     let resumeText: string
     try {
-      console.log("[API] Converting file to ArrayBuffer...")
+      console.log("[API] Converting file to Buffer...")
       const arrayBuffer = await resumeFile.arrayBuffer()
-      console.log("[API] ArrayBuffer size:", arrayBuffer.byteLength, "bytes")
+      const buffer = Buffer.from(arrayBuffer)
+      console.log("[API] Buffer size:", buffer.length, "bytes")
 
-      if (arrayBuffer.byteLength === 0) {
+      if (buffer.length === 0) {
         console.log("[API] Error: Empty file")
         return Response.json(
           { error: "The uploaded file is empty. Please upload a valid .docx file with content." },
@@ -364,7 +367,7 @@ export async function POST(req: Request) {
       }
 
       console.log("[API] Extracting text with mammoth...")
-      const result = await mammoth.extractRawText({ arrayBuffer })
+      const result = await mammoth.extractRawText({ buffer })
       resumeText = result.value
 
       if (result.messages && result.messages.length > 0) {
