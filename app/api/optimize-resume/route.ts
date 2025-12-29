@@ -114,7 +114,7 @@ ${resumeText}`
         maxOutputTokens: 4000,
         temperature: 0.3,
       })
-
+      console.log(prompt)
       console.log("[API] Gemini response received. Output length:", text.length, "characters")
 
       return Response.json({ optimizedResume: text })
