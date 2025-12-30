@@ -176,8 +176,8 @@ export function ResumeOptimizer() {
   const loadFromGoogleDrive = async () => {
     try {
       addLog("info", "Fetching resume from Google Drive...")
-      const exportUrl = `https://docs.google.com/document/d/${GOOGLE_DRIVE_DOC_ID}/export?format=docx`
-      const response = await fetch(exportUrl)
+      const exportUrl = `https://docs.google.com/document/d/${GOOGLE_DRIVE_DOC_ID}/export?format=docx&t=${Date.now()}`
+      const response = await fetch(exportUrl, { cache: "no-store" })
 
       if (!response.ok) {
         throw new Error(`Failed to fetch from Google Drive: ${response.status}`)
