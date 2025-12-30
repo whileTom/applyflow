@@ -43,6 +43,8 @@ interface OptimizeResponse {
     model: string
     paragraphCount?: number
     extractedResumePreview: string
+    skillsCount?: number
+    experienceCount?: number
   }
 }
 
@@ -137,6 +139,12 @@ export function ResumeOptimizer() {
       if (data.debug) {
         setPromptSent(data.debug.prompt)
         addLog("info", "Document XML parsed", `Extracted ${data.debug.paragraphCount || 0} paragraphs`)
+        if (data.debug.skillsCount !== undefined) {
+          addLog("info", "Skills extracted", `${data.debug.skillsCount} individual skills`)
+        }
+        if (data.debug.experienceCount !== undefined) {
+          addLog("info", "Experience entries", `${data.debug.experienceCount} positions`)
+        }
         addLog("info", "Text extracted", `${data.debug.resumeTextLength} characters from resume`)
         addLog("info", "Model used", data.debug.model)
         if (data.debug.processingTime) {
