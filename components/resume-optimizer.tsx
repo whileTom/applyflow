@@ -58,6 +58,7 @@ interface OptimizeResponse {
 }
 
 const GOOGLE_DRIVE_DOC_ID = "1Fug64SHhgdp99G7mhp07uu7X76xAWV4otudRiBwdQ5M"
+const PAGE_LOAD_TIMESTAMP = Date.now()
 
 export function ResumeOptimizer() {
   const [jobDescription, setJobDescription] = useState("")
@@ -176,7 +177,7 @@ export function ResumeOptimizer() {
   const loadFromGoogleDrive = async () => {
     try {
       addLog("info", "Fetching resume from Google Drive...")
-      const exportUrl = `https://docs.google.com/document/d/${GOOGLE_DRIVE_DOC_ID}/export?format=docx&t=${Date.now()}`
+      const exportUrl = `https://docs.google.com/document/d/${GOOGLE_DRIVE_DOC_ID}/export?format=docx&t=${PAGE_LOAD_TIMESTAMP}`
       const response = await fetch(exportUrl, { cache: "no-store" })
 
       if (!response.ok) {
