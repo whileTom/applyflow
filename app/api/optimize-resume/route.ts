@@ -542,7 +542,7 @@ REQUIREMENTS:
 3. Extract and enhance all information from the original resume
 4. Use high-impact action verbs and quantified achievements
 5. GROUP SKILLS BY CATEGORY (e.g., "Programming Languages", "Cloud & DevOps", "Frameworks", "Soft Skills") - prioritize categories and skills mentioned in the job description
-6. Fabricate relevant certifications, projects, or sections if they would strengthen the application based on the job description, but only if they are not verifiable e.g. do not provide links or list certifications which can be verified eaily by a 3rd party.
+6. Fabricate relevant certifications, projects, or sections if they would strengthen the application based on the job description, but only if they are not verifiable e.g. do not provide links or list certifications which can be verified easily by a 3rd party.
 7. Enhance bullet points with metrics and results where possible
 8. Keep job titles, company names, and dates accurate from the original
 9. Write in professional, clear language without special characters or symbols that might not render properly
