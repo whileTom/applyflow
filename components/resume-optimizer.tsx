@@ -385,22 +385,8 @@ export function ResumeOptimizer() {
     }
 
     try {
-      // Upload to server
-      const formData = new FormData()
-      formData.append("resume", file)
+      addLog("info", "Processing default resume upload...", file.name)
 
-      const response = await fetch("/api/upload-resume", {
-        method: "POST",
-        body: formData,
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to upload resume")
-      }
-
-      // Save locally
       const arrayBuffer = await file.arrayBuffer()
       const base64 = btoa(new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), ""))
       const saved = { name: file.name, data: base64 }
@@ -411,10 +397,10 @@ export function ResumeOptimizer() {
       setResumeFile(file)
       setUseDefaultResume(true)
 
-      addLog("success", "Default resume uploaded and saved", file.name)
+      addLog("success", "Default resume saved successfully", file.name)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error"
-      addLog("error", "Failed to upload default resume", errorMessage)
+      addLog("error", "Failed to save default resume", errorMessage)
     }
 
     // Reset input

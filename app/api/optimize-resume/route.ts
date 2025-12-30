@@ -546,7 +546,7 @@ REQUIREMENTS:
 7. Enhance bullet points with metrics and results where possible
 8. Keep job titles, company names, and dates accurate from the original
 9. Write in professional, clear language without special characters or symbols that might not render properly
-10. Create a compelling subtitle/professional title that appears under the name
+10. Do not modify the subtitle/professional title that appears under the name
 
 JOB DESCRIPTION:
 ${jobDescription}
