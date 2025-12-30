@@ -16,6 +16,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { HistoryDialog } from "./history-dialog"
 import {
   Upload,
   FileText,
@@ -430,7 +431,18 @@ export function ResumeOptimizer() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
       <div className="container mx-auto py-10 px-4 max-w-7xl">
-        <div className="flex justify-end mb-4">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <HistoryDialog />
+
+          <div className="text-center flex-1">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
+              Tom&apos;s Resume Optimizer
+            </h1>
+            <p className="text-muted-foreground/80 mt-2">Because manually tailoring resumes is so last century</p>
+          </div>
+
+          {/* Options Dialog */}
           <Dialog open={optionsOpen} onOpenChange={setOptionsOpen}>
             <DialogTrigger asChild>
               <Button
@@ -604,21 +616,6 @@ export function ResumeOptimizer() {
               </div>
             </DialogContent>
           </Dialog>
-        </div>
-
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-br from-primary/20 to-accent/20 mb-5 shadow-lg shadow-primary/20 ring-1 ring-primary/20">
-            <Sparkles className="w-10 h-10 text-primary" />
-          </div>
-          <h1 className="text-5xl font-bold tracking-tight bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent mb-3">
-            Tom's Resume Optimizer
-          </h1>
-          <p className="text-muted-foreground text-lg max-w-2xl mx-auto leading-relaxed">
-            Because manually tailoring resumes is so 2023. Let the robots do it.
-          </p>
-          <p className="text-sm text-muted-foreground/70 mt-3">
-            Your original DOCX formatting is preserved through semantic XML rewriting.
-          </p>
         </div>
 
         <div className="grid lg:grid-cols-2 gap-8">

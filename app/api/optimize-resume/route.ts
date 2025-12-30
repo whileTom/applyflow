@@ -3,84 +3,89 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import mammoth from "mammoth"
 import { Document, Packer, Paragraph, TextRun, AlignmentType, BorderStyle, convertInchesToTwip } from "docx"
 import { z } from "zod"
+import { createClient } from "@/lib/supabase/server"
 
 export const maxDuration = 60
 
-const ResumeSchema = z.object({
-  name: z.string().describe("Full name of the candidate"),
-  subtitle: z.string().describe("Professional title or tagline (e.g., 'Senior Software Engineer | Cloud Architect')"),
-  email: z.string().describe("Email address"),
-  phone: z.string().describe("Phone number"),
-  location: z.string().optional().describe("City, State or location"),
-  linkedin: z.string().optional().describe("LinkedIn URL or handle"),
-  website: z.string().optional().describe("Personal website or portfolio URL"),
-  summary: z.string().describe("Professional summary or objective, 2-4 sentences"),
+const resumeSchema = z.object({
+  name: z.string().describe("The applicant's full name"),
+  subtitle: z
+    .string()
+    .describe(
+      "A professional title/subtitle for the applicant based on the job they're applying for (e.g., 'Senior Software Engineer | Cloud Architect')",
+    ),
+  contact: z.object({
+    email: z.string().optional(),
+    phone: z.string().optional(),
+    location: z.string().optional(),
+    linkedin: z.string().optional(),
+    website: z.string().optional(),
+  }),
+  summary: z.string().describe("A compelling professional summary tailored to the job description"),
   skillCategories: z
     .array(
       z.object({
         category: z
           .string()
-          .describe("Category name (e.g., 'Programming Languages', 'Tools & Technologies', 'Soft Skills')"),
-        skills: z.array(z.string()).describe("List of skills in this category"),
+          .describe("The category name (e.g., 'Programming Languages', 'Cloud & DevOps', 'Frameworks')"),
+        skills: z.array(z.string()).describe("Individual skills in this category"),
       }),
     )
-    .describe("Skills grouped by category - prioritize skills mentioned in the job description"),
-  experience: z
-    .array(
-      z.object({
-        title: z.string().describe("Job title"),
-        company: z.string().describe("Company name"),
-        location: z.string().optional().describe("Job location"),
-        startDate: z.string().describe("Start date (e.g., 'Jan 2020' or '2020')"),
-        endDate: z.string().describe("End date or 'Present'"),
-        bullets: z.array(z.string()).describe("Achievement bullets with metrics and action verbs"),
-      }),
-    )
-    .describe("Work experience entries"),
-  education: z
-    .array(
-      z.object({
-        degree: z.string().describe("Degree name"),
-        school: z.string().describe("School/university name"),
-        location: z.string().optional().describe("School location"),
-        graduationDate: z.string().describe("Graduation date or expected date"),
-        gpa: z.string().optional().describe("GPA if notable"),
-        honors: z.string().optional().describe("Honors, awards, or relevant coursework"),
-      }),
-    )
-    .describe("Education entries"),
+    .describe("Skills grouped by category, prioritized by relevance to the job description"),
+  experience: z.array(
+    z.object({
+      title: z.string(),
+      company: z.string(),
+      location: z.string().optional(),
+      startDate: z.string(),
+      endDate: z.string(),
+      bullets: z.array(z.string()),
+    }),
+  ),
+  education: z.array(
+    z.object({
+      degree: z.string(),
+      institution: z.string(),
+      location: z.string().optional(),
+      graduationDate: z.string(),
+      details: z.array(z.string()).optional(),
+    }),
+  ),
   certifications: z
     .array(
       z.object({
-        name: z.string().describe("Certification name"),
-        issuer: z.string().optional().describe("Issuing organization"),
-        date: z.string().optional().describe("Date obtained or expiry"),
+        name: z.string(),
+        issuer: z.string().optional(),
+        date: z.string().optional(),
       }),
     )
-    .optional()
-    .describe("Professional certifications"),
+    .optional(),
   projects: z
     .array(
       z.object({
-        name: z.string().describe("Project name"),
-        description: z.string().describe("Brief description with technologies used and impact"),
-        url: z.string().optional().describe("Project URL if applicable"),
+        name: z.string(),
+        description: z.string(),
+        technologies: z.array(z.string()).optional(),
       }),
     )
-    .optional()
-    .describe("Notable projects"),
+    .optional(),
   additionalSections: z
     .array(
       z.object({
-        title: z.string().describe("Section title (e.g., 'Languages', 'Volunteer Work', 'Publications')"),
-        items: z.array(z.string()).describe("Items in this section"),
+        title: z.string(),
+        items: z.array(z.string()),
       }),
     )
-    .optional()
-    .describe("Any additional relevant sections"),
+    .optional(),
+  jobMetadata: z
+    .object({
+      jobTitle: z.string().describe("The job title being applied for, extracted from the job description"),
+      companyName: z.string().describe("The company name hiring for the position, extracted from the job description"),
+    })
+    .describe("Metadata about the job being applied for"),
 })
 
-type ResumeData = z.infer<typeof ResumeSchema>
+type ResumeData = z.infer<typeof resumeSchema>
 
 const HEADER_GREEN = "5A9E6F"
 
@@ -142,11 +147,11 @@ function generateDocx(resume: ResumeData): Document {
 
   // Contact Info Line
   const contactParts: string[] = []
-  if (resume.email) contactParts.push(resume.email)
-  if (resume.phone) contactParts.push(resume.phone)
-  if (resume.location) contactParts.push(resume.location)
-  if (resume.linkedin) contactParts.push(resume.linkedin)
-  if (resume.website) contactParts.push(resume.website)
+  if (resume.contact.email) contactParts.push(resume.contact.email)
+  if (resume.contact.phone) contactParts.push(resume.contact.phone)
+  if (resume.contact.location) contactParts.push(resume.contact.location)
+  if (resume.contact.linkedin) contactParts.push(resume.contact.linkedin)
+  if (resume.contact.website) contactParts.push(resume.contact.website)
 
   if (contactParts.length > 0) {
     sections.push(
@@ -325,7 +330,7 @@ function generateDocx(resume: ResumeData): Document {
               font: "Calibri",
             }),
             new TextRun({
-              text: sanitizeText(edu.school),
+              text: sanitizeText(edu.institution),
               italics: true,
               size: 22,
               font: "Calibri",
@@ -346,8 +351,7 @@ function generateDocx(resume: ResumeData): Document {
 
       const eduDetails: string[] = []
       if (edu.graduationDate) eduDetails.push(edu.graduationDate)
-      if (edu.gpa) eduDetails.push(`GPA: ${edu.gpa}`)
-      if (edu.honors) eduDetails.push(edu.honors)
+      if (edu.details && edu.details.length > 0) eduDetails.push(edu.details.join(", "))
 
       if (eduDetails.length > 0) {
         sections.push(
@@ -565,7 +569,7 @@ Return the optimized resume data following the exact schema structure. Preserve 
 
       const { object: resumeData } = await generateObject({
         model: google(modelName),
-        schema: ResumeSchema,
+        schema: resumeSchema,
         prompt,
         temperature: 0.3,
       })
@@ -584,9 +588,42 @@ Return the optimized resume data following the exact schema structure. Preserve 
       const totalProcessingTime = Date.now() - requestStartTime
       console.log("[API] DOCX generated successfully in", totalProcessingTime, "ms total")
 
+      try {
+        const supabase = await createClient()
+
+        const { error: historyError } = await supabase.from("resume_history").upsert(
+          {
+            job_title: resumeData.jobMetadata?.jobTitle || "Unknown Position",
+            company_name: resumeData.jobMetadata?.companyName || "Unknown Company",
+            job_description: jobDescription,
+            generated_resume_docx: docxBase64,
+            created_at: new Date().toISOString(),
+          },
+          {
+            onConflict: "job_title,company_name",
+          },
+        )
+
+        if (historyError) {
+          console.error("[API] Failed to save to history:", historyError)
+          // Don't fail the request if history save fails
+        } else {
+          console.log(
+            "[API] Saved to history:",
+            resumeData.jobMetadata?.jobTitle,
+            "at",
+            resumeData.jobMetadata?.companyName,
+          )
+        }
+      } catch (historyErr) {
+        console.error("[API] History save error:", historyErr)
+        // Don't fail the request if history save fails
+      }
+
       return Response.json({
         optimizedResume: displayText,
         docxBase64,
+        jobMetadata: resumeData.jobMetadata,
         debug: {
           prompt,
           resumeTextLength: resumeText.length,
@@ -626,7 +663,13 @@ function formatForDisplay(resume: ResumeData): string {
   lines.push(resume.name)
   if (resume.subtitle) lines.push(resume.subtitle)
 
-  const contact = [resume.email, resume.phone, resume.location, resume.linkedin, resume.website].filter(Boolean)
+  const contact = [
+    resume.contact.email,
+    resume.contact.phone,
+    resume.contact.location,
+    resume.contact.linkedin,
+    resume.contact.website,
+  ].filter(Boolean)
   if (contact.length) lines.push(contact.join(" | "))
 
   lines.push("")
@@ -660,8 +703,8 @@ function formatForDisplay(resume: ResumeData): string {
   if (resume.education?.length) {
     lines.push("EDUCATION")
     for (const edu of resume.education) {
-      lines.push(`${edu.degree} | ${edu.school}${edu.location ? ` | ${edu.location}` : ""}`)
-      const details = [edu.graduationDate, edu.gpa ? `GPA: ${edu.gpa}` : null, edu.honors].filter(Boolean)
+      lines.push(`${edu.degree} | ${edu.institution}${edu.location ? ` | ${edu.location}` : ""}`)
+      const details = [edu.graduationDate, ...(edu.details || [])].filter(Boolean)
       if (details.length) lines.push(details.join(" | "))
       lines.push("")
     }
