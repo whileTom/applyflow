@@ -8,19 +8,18 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
-  FileUp,
-  Loader2,
+  Upload,
+  FileText,
   Sparkles,
   Download,
-  FileText,
-  Briefcase,
-  Key,
   Eye,
   EyeOff,
-  Terminal,
+  Info,
   ChevronDown,
-  ChevronUp,
+  ChevronRight,
+  Settings,
 } from "lucide-react"
 
 interface DebugLog {
@@ -57,6 +56,7 @@ export function ResumeOptimizer() {
   const [error, setError] = useState("")
   const [apiKey, setApiKey] = useState("")
   const [showApiKey, setShowApiKey] = useState(false)
+  const [apiKeyExpanded, setApiKeyExpanded] = useState(false)
   const [debugLogs, setDebugLogs] = useState<DebugLog[]>([])
   const [showDebugPanel, setShowDebugPanel] = useState(true)
   const [promptSent, setPromptSent] = useState("")
@@ -94,14 +94,11 @@ export function ResumeOptimizer() {
   }
 
   const handleOptimize = async () => {
-    if (!apiKey.trim()) {
-      setError("Please enter your Google Gemini API key")
-      return
-    }
     if (!jobDescription.trim()) {
       setError("Please enter a job description")
       return
     }
+
     if (!resumeFile) {
       setError("Please upload a resume file")
       return
@@ -120,7 +117,9 @@ export function ResumeOptimizer() {
       const formData = new FormData()
       formData.append("jobDescription", jobDescription)
       formData.append("resume", resumeFile)
-      formData.append("apiKey", apiKey)
+      if (apiKey.trim()) {
+        formData.append("apiKey", apiKey)
+      }
 
       addLog("request", "Sending request to /api/optimize-resume")
       addLog("info", "Parsing DOCX XML structure for semantic rewrite...")
@@ -251,52 +250,70 @@ export function ResumeOptimizer() {
           </p>
         </div>
 
-        <Card className="mb-8 rounded-3xl border-primary/10 bg-card/50 backdrop-blur-sm shadow-xl shadow-primary/5">
-          <CardHeader className="pb-4">
-            <CardTitle className="flex items-center gap-3 text-lg">
-              <div className="p-2 rounded-xl bg-primary/10 ring-1 ring-primary/20">
-                <Key className="w-5 h-5 text-primary" />
-              </div>
-              Google Gemini API Key
-            </CardTitle>
-            <CardDescription className="text-muted-foreground/80">
-              Enter your Google Gemini API key. Get one at{" "}
-              <a
-                href="https://aistudio.google.com/apikey"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary underline underline-offset-4 hover:text-primary/80 transition-colors"
-              >
-                Google AI Studio
-              </a>
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="relative">
-              <Input
-                type={showApiKey ? "text" : "password"}
-                placeholder="Enter your API key..."
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                className="pr-12 rounded-2xl h-12 bg-input/50 border-border/50 focus:border-primary/50 focus:ring-primary/20"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl hover:bg-primary/10"
-                onClick={() => setShowApiKey(!showApiKey)}
-              >
-                {showApiKey ? (
-                  <EyeOff className="w-4 h-4 text-muted-foreground" />
-                ) : (
-                  <Eye className="w-4 h-4 text-muted-foreground" />
-                )}
-                <span className="sr-only">{showApiKey ? "Hide" : "Show"} API key</span>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <Collapsible open={apiKeyExpanded} onOpenChange={setApiKeyExpanded}>
+          <Card className="border-border/50 bg-card/50 backdrop-blur-sm rounded-3xl shadow-lg shadow-primary/5">
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer hover:bg-primary/5 transition-colors rounded-t-3xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-2xl bg-primary/10 ring-1 ring-primary/20">
+                      <Settings className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg font-semibold text-foreground">API Key Settings</CardTitle>
+                      <CardDescription className="text-muted-foreground/80">
+                        {apiKey.trim() ? "Custom API key configured" : "Using default API key (click to use your own)"}
+                      </CardDescription>
+                    </div>
+                  </div>
+                  {apiKeyExpanded ? (
+                    <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                  )}
+                </div>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="pt-0">
+                <p className="text-sm text-muted-foreground mb-3">
+                  Optionally enter your own Google Gemini API key. Get one at{" "}
+                  <a
+                    href="https://aistudio.google.com/apikey"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary underline underline-offset-4 hover:text-primary/80 transition-colors"
+                  >
+                    Google AI Studio
+                  </a>
+                </p>
+                <div className="relative">
+                  <Input
+                    type={showApiKey ? "text" : "password"}
+                    placeholder="Leave empty to use default key..."
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    className="pr-12 rounded-2xl h-12 bg-input/50 border-border/50 focus:border-primary/50 focus:ring-primary/20"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl hover:bg-primary/10"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                  >
+                    {showApiKey ? (
+                      <EyeOff className="w-4 h-4 text-muted-foreground" />
+                    ) : (
+                      <Eye className="w-4 h-4 text-muted-foreground" />
+                    )}
+                    <span className="sr-only">{showApiKey ? "Hide" : "Show"} API key</span>
+                  </Button>
+                </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
 
         <div className="grid lg:grid-cols-2 gap-8">
           <div className="space-y-8">
@@ -304,7 +321,7 @@ export function ResumeOptimizer() {
               <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-3 text-lg">
                   <div className="p-2 rounded-xl bg-accent/10 ring-1 ring-accent/20">
-                    <Briefcase className="w-5 h-5 text-accent" />
+                    <Upload className="w-5 h-5 text-accent" />
                   </div>
                   Job Description
                 </CardTitle>
@@ -342,7 +359,7 @@ export function ResumeOptimizer() {
                   >
                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
                       <div className="p-3 rounded-2xl bg-primary/10 mb-3 group-hover:bg-primary/20 transition-colors">
-                        <FileUp className="w-7 h-7 text-primary" />
+                        <Upload className="w-7 h-7 text-primary" />
                       </div>
                       <p className="text-sm text-muted-foreground">
                         {resumeFile ? (
@@ -372,13 +389,13 @@ export function ResumeOptimizer() {
 
                   <Button
                     onClick={handleOptimize}
-                    disabled={isLoading || !jobDescription.trim() || !resumeFile || !apiKey.trim()}
+                    disabled={isLoading || !jobDescription.trim() || !resumeFile}
                     className="w-full h-14 rounded-2xl text-lg font-semibold bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 shadow-lg shadow-primary/25 transition-all duration-300 hover:shadow-xl hover:shadow-primary/30 disabled:opacity-50 disabled:shadow-none"
                     size="lg"
                   >
                     {isLoading ? (
                       <>
-                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                        <Sparkles className="w-5 h-5 mr-2 animate-spin" />
                         Optimizing...
                       </>
                     ) : (
@@ -419,7 +436,7 @@ export function ResumeOptimizer() {
               {isLoading ? (
                 <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
                   <div className="p-4 rounded-3xl bg-primary/10 mb-5 animate-pulse">
-                    <Loader2 className="w-10 h-10 animate-spin text-primary" />
+                    <Sparkles className="w-10 h-10 animate-spin text-primary" />
                   </div>
                   <p className="font-medium">Optimizing your resume...</p>
                   <p className="text-sm text-muted-foreground/70">Parsing XML structure and preserving formatting</p>
@@ -451,7 +468,7 @@ export function ResumeOptimizer() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-xl bg-accent/10 ring-1 ring-accent/20">
-                  <Terminal className="w-5 h-5 text-accent" />
+                  <Info className="w-5 h-5 text-accent" />
                 </div>
                 <CardTitle className="text-lg">Debug Output</CardTitle>
                 <span className="text-xs bg-primary/10 px-3 py-1 rounded-full text-primary font-medium">
@@ -473,7 +490,7 @@ export function ResumeOptimizer() {
                   </Button>
                 )}
                 <div className="p-1 rounded-lg bg-muted/50">
-                  {showDebugPanel ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  {showDebugPanel ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                 </div>
               </div>
             </div>
