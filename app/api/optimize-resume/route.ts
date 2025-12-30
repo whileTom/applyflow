@@ -530,12 +530,12 @@ export async function POST(req: Request) {
 TASK: Analyze the provided resume and job description, then return a restructured and optimized version of the resume as structured JSON data.
 
 REQUIREMENTS:
-1. PRESERVE THE ORIGINAL RESUME FORMAT AND STRUCTURE as much as possible - follow the same section ordering and style
-2. Extract and enhance all information from the original resume
-3. Optimize content to align with the job description requirements
+1. Optimize all content to align exactly with the job description requirements.
+2. PRESERVE THE ORIGINAL RESUME FORMAT AND STRUCTURE as much as possible - follow the same section ordering and style
+3. Extract and enhance all information from the original resume
 4. Use high-impact action verbs and quantified achievements
 5. GROUP SKILLS BY CATEGORY (e.g., "Programming Languages", "Cloud & DevOps", "Frameworks", "Soft Skills") - prioritize categories and skills mentioned in the job description
-6. Add relevant certifications, projects, or sections if they would strengthen the application
+6. Fabricate relevant certifications, projects, or sections if they would strengthen the application based on the job description
 7. Enhance bullet points with metrics and results where possible
 8. Keep job titles, company names, and dates accurate from the original
 9. Write in professional, clear language without special characters or symbols that might not render properly
