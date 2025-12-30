@@ -8,7 +8,14 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import {
   Upload,
   FileText,
@@ -22,6 +29,7 @@ import {
   Settings,
   Save,
   Trash2,
+  Key,
 } from "lucide-react"
 
 interface DebugLog {
@@ -60,13 +68,14 @@ export function ResumeOptimizer() {
   const [showApiKey, setShowApiKey] = useState(false)
   const [apiKeyExpanded, setApiKeyExpanded] = useState(false)
   const [savedApiKey, setSavedApiKey] = useState<string | null>(null)
-  const [resumeExpanded, setResumeExpanded] = useState(false)
+  const [uploadExpanded, setUploadExpanded] = useState(false)
   const [defaultResume, setDefaultResume] = useState<{ name: string; data: string } | null>(null)
   const [useDefaultResume, setUseDefaultResume] = useState(false)
   const [debugLogs, setDebugLogs] = useState<DebugLog[]>([])
   const [showDebugPanel, setShowDebugPanel] = useState(false)
   const [promptSent, setPromptSent] = useState("")
   const [rawResponse, setRawResponse] = useState("")
+  const [optionsOpen, setOptionsOpen] = useState(false)
 
   useEffect(() => {
     const loadDefaultResume = async () => {
@@ -75,6 +84,17 @@ export function ResumeOptimizer() {
         try {
           const parsed = JSON.parse(saved)
           setDefaultResume(parsed)
+          const binary = atob(parsed.data)
+          const bytes = new Uint8Array(binary.length)
+          for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i)
+          }
+          const file = new File([bytes], parsed.name, {
+            type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          })
+          setResumeFile(file)
+          setUseDefaultResume(true)
+          addLog("info", "Using default resume", parsed.name)
         } catch {
           localStorage.removeItem("defaultResume")
         }
@@ -89,6 +109,12 @@ export function ResumeOptimizer() {
               new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), ""),
             )
             setDefaultResume({ name: "default-resume.docx", data: base64 })
+            const file = new File([blob], "default-resume.docx", {
+              type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            })
+            setResumeFile(file)
+            setUseDefaultResume(true)
+            addLog("info", "Using default resume", "default-resume.docx")
           }
         } catch {
           // No default resume available
@@ -106,12 +132,37 @@ export function ResumeOptimizer() {
 
   const saveAsDefault = async () => {
     if (!resumeFile) return
-    const arrayBuffer = await resumeFile.arrayBuffer()
-    const base64 = btoa(new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), ""))
-    const saved = { name: resumeFile.name, data: base64 }
-    localStorage.setItem("defaultResume", JSON.stringify(saved))
-    setDefaultResume(saved)
-    addLog("success", "Resume saved as default", resumeFile.name)
+
+    try {
+      addLog("info", "Uploading resume as global default...", resumeFile.name)
+
+      const formData = new FormData()
+      formData.append("resume", resumeFile)
+
+      const response = await fetch("/api/upload-resume", {
+        method: "POST",
+        body: formData,
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to upload resume")
+      }
+
+      // Also save locally for quick access
+      const arrayBuffer = await resumeFile.arrayBuffer()
+      const base64 = btoa(new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), ""))
+      const saved = { name: resumeFile.name, data: base64 }
+      localStorage.setItem("defaultResume", JSON.stringify(saved))
+      setDefaultResume(saved)
+
+      addLog("success", "Resume saved as global default for all users", resumeFile.name)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Unknown error"
+      addLog("error", "Failed to save default resume", errorMessage)
+      setError(`Failed to save default resume: ${errorMessage}`)
+    }
   }
 
   const clearDefaultResume = () => {
@@ -325,77 +376,58 @@ export function ResumeOptimizer() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
       <div className="container mx-auto py-10 px-4 max-w-7xl">
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-br from-primary/20 to-accent/20 mb-5 shadow-lg shadow-primary/20 ring-1 ring-primary/20">
-            <Sparkles className="w-10 h-10 text-primary" />
-          </div>
-          <h1 className="text-5xl font-bold tracking-tight bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent mb-3">
-            Resume Optimizer
-          </h1>
-          <p className="text-muted-foreground text-lg max-w-2xl mx-auto leading-relaxed">
-            Tailor your resume to match any job description using AI. Upload your resume and paste the job description
-            to get started.
-          </p>
-          <p className="text-sm text-muted-foreground/70 mt-3">
-            Your original DOCX formatting is preserved through semantic XML rewriting.
-          </p>
-        </div>
+        <div className="flex justify-end mb-4">
+          <Dialog open={optionsOpen} onOpenChange={setOptionsOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="rounded-2xl h-12 w-12 border-border/50 bg-card/50 backdrop-blur-sm hover:bg-primary/10 hover:border-primary/50 shadow-lg shadow-primary/5"
+              >
+                <Settings className="w-5 h-5 text-muted-foreground" />
+                <span className="sr-only">Options</span>
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px] rounded-3xl bg-card/95 backdrop-blur-xl border-border/50">
+              <DialogHeader>
+                <DialogTitle className="text-xl font-semibold">Options</DialogTitle>
+                <DialogDescription className="text-muted-foreground/80">
+                  Configure your API key and default resume settings
+                </DialogDescription>
+              </DialogHeader>
 
-        <div className="space-y-4 mb-8">
-          <Collapsible open={apiKeyExpanded} onOpenChange={setApiKeyExpanded}>
-            <Card className="border-border/50 bg-card/50 backdrop-blur-sm rounded-3xl shadow-lg shadow-primary/5">
-              <CollapsibleTrigger asChild>
-                <CardHeader className="cursor-pointer hover:bg-primary/5 transition-colors rounded-t-3xl">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2.5 rounded-2xl bg-primary/10 ring-1 ring-primary/20">
-                        <Settings className="w-5 h-5 text-primary" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-lg font-semibold text-foreground">API Key Settings</CardTitle>
-                        <CardDescription className="text-muted-foreground/80">
-                          {savedApiKey
-                            ? "Saved API key configured"
-                            : apiKey.trim()
-                              ? "Custom API key entered (not saved)"
-                              : "Using default API key (click to use your own)"}
-                        </CardDescription>
-                      </div>
+              <div className="space-y-6 py-4">
+                {/* API Key Section */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-primary/10 ring-1 ring-primary/20">
+                      <Key className="w-4 h-4 text-primary" />
                     </div>
-                    {apiKeyExpanded ? (
-                      <ChevronDown className="w-5 h-5 text-muted-foreground" />
-                    ) : (
-                      <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                    )}
+                    <div>
+                      <h4 className="font-medium text-foreground">API Key</h4>
+                      <p className="text-xs text-muted-foreground/70">
+                        {savedApiKey
+                          ? "Saved API key configured"
+                          : apiKey.trim()
+                            ? "Custom key entered (not saved)"
+                            : "Using default API key"}
+                      </p>
+                    </div>
                   </div>
-                </CardHeader>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <CardContent className="pt-0">
-                  <p className="text-sm text-muted-foreground mb-3">
-                    Optionally enter your own Google Gemini API key. Get one at{" "}
-                    <a
-                      href="https://aistudio.google.com/apikey"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary underline underline-offset-4 hover:text-primary/80 transition-colors"
-                    >
-                      Google AI Studio
-                    </a>
-                  </p>
+
                   <div className="relative">
                     <Input
                       type={showApiKey ? "text" : "password"}
                       placeholder="Leave empty to use default key..."
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}
-                      className="pr-12 rounded-2xl h-12 bg-input/50 border-border/50 focus:border-primary/50 focus:ring-primary/20"
+                      className="pr-12 rounded-xl h-11 bg-input/50 border-border/50 focus:border-primary/50 focus:ring-primary/20"
                     />
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl hover:bg-primary/10"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg hover:bg-primary/10 h-7 w-7"
                       onClick={() => setShowApiKey(!showApiKey)}
                     >
                       {showApiKey ? (
@@ -403,10 +435,10 @@ export function ResumeOptimizer() {
                       ) : (
                         <Eye className="w-4 h-4 text-muted-foreground" />
                       )}
-                      <span className="sr-only">{showApiKey ? "Hide" : "Show"} API key</span>
                     </Button>
                   </div>
-                  <div className="flex gap-2 mt-3">
+
+                  <div className="flex gap-2">
                     <Button
                       type="button"
                       variant="outline"
@@ -427,53 +459,49 @@ export function ResumeOptimizer() {
                         className="rounded-xl text-destructive hover:text-destructive bg-transparent"
                       >
                         <Trash2 className="w-4 h-4 mr-2" />
-                        Clear Saved
+                        Clear
                       </Button>
                     )}
                   </div>
-                </CardContent>
-              </CollapsibleContent>
-            </Card>
-          </Collapsible>
 
-          <Collapsible open={resumeExpanded} onOpenChange={setResumeExpanded}>
-            <Card className="border-border/50 bg-card/50 backdrop-blur-sm rounded-3xl shadow-lg shadow-primary/5">
-              <CollapsibleTrigger asChild>
-                <CardHeader className="cursor-pointer hover:bg-primary/5 transition-colors rounded-t-3xl">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2.5 rounded-2xl bg-accent/10 ring-1 ring-accent/20">
-                        <FileText className="w-5 h-5 text-accent" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-lg font-semibold text-foreground">Default Resume</CardTitle>
-                        <CardDescription className="text-muted-foreground/80">
-                          {defaultResume
-                            ? `Saved: ${defaultResume.name}`
-                            : "Save a resume to use as default (click to expand)"}
-                        </CardDescription>
-                      </div>
-                    </div>
-                    {resumeExpanded ? (
-                      <ChevronDown className="w-5 h-5 text-muted-foreground" />
-                    ) : (
-                      <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                    )}
-                  </div>
-                </CardHeader>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <CardContent className="pt-0 space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    Save a resume to quickly use it for multiple job descriptions without re-uploading.
+                  <p className="text-xs text-muted-foreground/60">
+                    Get an API key at{" "}
+                    <a
+                      href="https://aistudio.google.com/apikey"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline underline-offset-2 hover:text-primary/80"
+                    >
+                      Google AI Studio
+                    </a>
                   </p>
+                </div>
+
+                <div className="h-px bg-border/50" />
+
+                {/* Default Resume Section */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-accent/10 ring-1 ring-accent/20">
+                      <FileText className="w-4 h-4 text-accent" />
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-foreground">Default Resume</h4>
+                      <p className="text-xs text-muted-foreground/70">
+                        {defaultResume ? `Saved: ${defaultResume.name}` : "No default resume saved"}
+                      </p>
+                    </div>
+                  </div>
 
                   {defaultResume ? (
-                    <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="flex flex-col gap-2">
                       <Button
-                        onClick={loadDefaultResume}
+                        onClick={() => {
+                          loadDefaultResume()
+                          setOptionsOpen(false)
+                        }}
                         variant="outline"
-                        className="flex-1 rounded-2xl h-11 border-accent/30 hover:bg-accent/10 hover:border-accent/50 bg-transparent"
+                        className="w-full rounded-xl h-10 border-accent/30 hover:bg-accent/10 hover:border-accent/50 bg-transparent justify-start"
                       >
                         <FileText className="w-4 h-4 mr-2" />
                         Use "{defaultResume.name}"
@@ -481,34 +509,52 @@ export function ResumeOptimizer() {
                       <Button
                         onClick={clearDefaultResume}
                         variant="outline"
-                        className="rounded-2xl h-11 border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50 text-destructive bg-transparent"
+                        className="w-full rounded-xl h-10 border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50 text-destructive bg-transparent justify-start"
                       >
                         <Trash2 className="w-4 h-4 mr-2" />
-                        Clear Default
+                        Clear Default Resume
                       </Button>
                     </div>
                   ) : (
-                    <div className="p-4 rounded-2xl border-2 border-dashed border-border/50 bg-muted/20 text-center">
-                      <p className="text-sm text-muted-foreground/70">
-                        Upload a resume below and click "Save as Default" to save it here
+                    <div className="p-3 rounded-xl border border-dashed border-border/50 bg-muted/20 text-center">
+                      <p className="text-xs text-muted-foreground/70">
+                        Upload a resume below and click "Save as Default"
                       </p>
                     </div>
                   )}
 
                   {resumeFile && !useDefaultResume && (
                     <Button
-                      onClick={saveAsDefault}
+                      onClick={() => {
+                        saveAsDefault()
+                      }}
                       variant="outline"
-                      className="w-full rounded-2xl h-11 border-primary/30 hover:bg-primary/10 hover:border-primary/50 bg-transparent"
+                      className="w-full rounded-xl h-10 border-primary/30 hover:bg-primary/10 hover:border-primary/50 bg-transparent justify-start"
                     >
                       <Save className="w-4 h-4 mr-2" />
                       Save "{resumeFile.name}" as Default
                     </Button>
                   )}
-                </CardContent>
-              </CollapsibleContent>
-            </Card>
-          </Collapsible>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-br from-primary/20 to-accent/20 mb-5 shadow-lg shadow-primary/20 ring-1 ring-primary/20">
+            <Sparkles className="w-10 h-10 text-primary" />
+          </div>
+          <h1 className="text-5xl font-bold tracking-tight bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent mb-3">
+            Resume Optimizer
+          </h1>
+          <p className="text-muted-foreground text-lg max-w-2xl mx-auto leading-relaxed">
+            Tailor your resume to match any job description using AI. Upload your resume and paste the job description
+            to get started.
+          </p>
+          <p className="text-sm text-muted-foreground/70 mt-3">
+            Your original DOCX formatting is preserved through semantic XML rewriting.
+          </p>
         </div>
 
         <div className="grid lg:grid-cols-2 gap-8">
@@ -535,72 +581,93 @@ export function ResumeOptimizer() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-3xl border-primary/10 bg-card/50 backdrop-blur-sm shadow-xl shadow-primary/5">
-              <CardHeader className="pb-4">
+            {/* Upload Resume Card */}
+            <Card className="border-border/40 bg-card/50 backdrop-blur-sm shadow-xl shadow-primary/5 rounded-3xl overflow-hidden">
+              {/* Collapsible header with click handler */}
+              <CardHeader
+                className="bg-gradient-to-r from-primary/5 to-accent/5 cursor-pointer hover:from-primary/10 hover:to-accent/10 transition-colors"
+                onClick={() => setUploadExpanded(!uploadExpanded)}
+              >
                 <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-lg">Upload Resume</CardTitle>
-                    <CardDescription className="text-muted-foreground/80">
-                      Upload your resume in .docx format
-                    </CardDescription>
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-2xl bg-primary/10 ring-1 ring-primary/20 shadow-lg shadow-primary/10">
+                      <FileText className="w-6 h-6 text-primary" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg">Upload Resume</CardTitle>
+                      <CardDescription className="text-muted-foreground/80">
+                        {resumeFile ? resumeFile.name : "Upload your resume in .docx format"}
+                      </CardDescription>
+                    </div>
                   </div>
+                  <ChevronDown
+                    className={`w-5 h-5 text-muted-foreground transition-transform ${uploadExpanded ? "rotate-180" : ""}`}
+                  />
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-5">
-                  <Label
-                    htmlFor="resume-upload"
-                    className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-primary/20 rounded-2xl cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all duration-300 group"
-                  >
-                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                      <div className="p-3 rounded-2xl bg-primary/10 mb-3 group-hover:bg-primary/20 transition-colors">
-                        <Upload className="w-7 h-7 text-primary" />
+              {uploadExpanded && (
+                <CardContent className="pt-5">
+                  <div className="space-y-5">
+                    <Label
+                      htmlFor="resume-upload"
+                      className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-primary/20 rounded-2xl cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all duration-300 group"
+                    >
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <div className="p-3 rounded-2xl bg-primary/10 mb-3 group-hover:bg-primary/20 transition-colors">
+                          <Upload className="w-7 h-7 text-primary" />
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {resumeFile ? (
+                            <span className="font-semibold text-primary">{resumeFile.name}</span>
+                          ) : (
+                            <>
+                              <span className="font-semibold text-foreground">Click to upload</span> or drag and drop
+                            </>
+                          )}
+                        </p>
+                        <p className="text-xs text-muted-foreground/70 mt-1">.docx files only</p>
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        {resumeFile ? (
-                          <span className="font-semibold text-primary">{resumeFile.name}</span>
-                        ) : (
-                          <>
-                            <span className="font-semibold text-foreground">Click to upload</span> or drag and drop
-                          </>
-                        )}
-                      </p>
-                      <p className="text-xs text-muted-foreground/70 mt-1">.docx files only</p>
-                    </div>
-                    <input
-                      id="resume-upload"
-                      type="file"
-                      accept=".docx"
-                      className="hidden"
-                      onChange={handleFileChange}
-                    />
-                  </Label>
+                      <input
+                        id="resume-upload"
+                        type="file"
+                        accept=".docx"
+                        className="hidden"
+                        onChange={handleFileChange}
+                      />
+                    </Label>
 
-                  {error && (
-                    <div className="p-3 rounded-2xl bg-destructive/10 border border-destructive/20">
-                      <p className="text-sm text-destructive">{error}</p>
-                    </div>
-                  )}
-
-                  <Button
-                    onClick={handleOptimize}
-                    disabled={isLoading || !jobDescription.trim() || !resumeFile}
-                    className="w-full h-14 rounded-2xl text-lg font-semibold bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 shadow-lg shadow-primary/25 transition-all duration-300 hover:shadow-xl hover:shadow-primary/30 disabled:opacity-50 disabled:shadow-none"
-                    size="lg"
-                  >
-                    {isLoading ? (
-                      <>
-                        <Sparkles className="w-5 h-5 mr-2 animate-spin" />
-                        Optimizing...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-5 h-5 mr-2" />
-                        Optimize Resume
-                      </>
+                    {error && (
+                      <div className="p-3 rounded-2xl bg-destructive/10 border border-destructive/20">
+                        <p className="text-sm text-destructive">{error}</p>
+                      </div>
                     )}
-                  </Button>
-                </div>
+                  </div>
+                </CardContent>
+              )}
+              <CardContent className="pt-0">
+                {error && !uploadExpanded && (
+                  <div className="p-3 rounded-2xl bg-destructive/10 border border-destructive/20 mb-4">
+                    <p className="text-sm text-destructive">{error}</p>
+                  </div>
+                )}
+                <Button
+                  onClick={handleOptimize}
+                  disabled={isLoading || !jobDescription.trim() || !resumeFile}
+                  className="w-full h-14 rounded-2xl text-lg font-semibold bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 shadow-lg shadow-primary/25 transition-all duration-300 hover:shadow-xl hover:shadow-primary/30 disabled:opacity-50 disabled:shadow-none"
+                  size="lg"
+                >
+                  {isLoading ? (
+                    <>
+                      <Sparkles className="w-5 h-5 mr-2 animate-spin" />
+                      Optimizing...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-5 h-5 mr-2" />
+                      Optimize Resume
+                    </>
+                  )}
+                </Button>
               </CardContent>
             </Card>
           </div>
