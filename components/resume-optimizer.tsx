@@ -57,6 +57,8 @@ interface OptimizeResponse {
   }
 }
 
+const GOOGLE_DRIVE_DOC_ID = "1Fug64SHhgdp99G7mhp07uu7X76xAWV4otudRiBwdQ5M"
+
 export function ResumeOptimizer() {
   const [jobDescription, setJobDescription] = useState("")
   const [resumeFile, setResumeFile] = useState<File | null>(null)
@@ -95,31 +97,9 @@ export function ResumeOptimizer() {
           })
           setResumeFile(file)
           setUseDefaultResume(true)
-          addLog("info", "Using default resume", parsed.name)
+          addLog("info", "Using saved default resume", parsed.name)
         } catch {
           localStorage.removeItem("defaultResume")
-        }
-      } else {
-        try {
-          const response = await fetch("/resume/default-resume.json")
-          if (response.ok) {
-            const jsonData = await response.json()
-            const binary = atob(jsonData.data)
-            const bytes = new Uint8Array(binary.length)
-            for (let i = 0; i < binary.length; i++) {
-              bytes[i] = binary.charCodeAt(i)
-            }
-            const fileName = jsonData.originalName || "default-resume.docx"
-            setDefaultResume({ name: fileName, data: jsonData.data })
-            const file = new File([bytes], fileName, {
-              type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            })
-            setResumeFile(file)
-            setUseDefaultResume(true)
-            addLog("info", "Using default resume", fileName)
-          }
-        } catch {
-          // No default resume available
         }
       }
     }
@@ -170,6 +150,8 @@ export function ResumeOptimizer() {
   const clearDefaultResume = () => {
     localStorage.removeItem("defaultResume")
     setDefaultResume(null)
+    setResumeFile(null)
+    setUseDefaultResume(false)
     addLog("info", "Default resume cleared")
   }
 
@@ -189,6 +171,41 @@ export function ResumeOptimizer() {
     setResumeFile(file)
     setUseDefaultResume(true)
     addLog("info", "Using default resume", defaultResume.name)
+  }
+
+  const loadFromGoogleDrive = async () => {
+    try {
+      addLog("info", "Fetching resume from Google Drive...")
+      const exportUrl = `https://docs.google.com/document/d/${GOOGLE_DRIVE_DOC_ID}/export?format=docx`
+      const response = await fetch(exportUrl)
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch from Google Drive: ${response.status}`)
+      }
+
+      const blob = await response.blob()
+      const arrayBuffer = await blob.arrayBuffer()
+      const bytes = new Uint8Array(arrayBuffer)
+
+      // Convert to base64 for storage
+      let binary = ""
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i])
+      }
+      const base64Data = btoa(binary)
+
+      const fileName = "google-drive-resume.docx"
+      const file = new File([blob], fileName, {
+        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      })
+
+      setResumeFile(file)
+      setDefaultResume({ name: fileName, data: base64Data })
+      setUseDefaultResume(true)
+      addLog("success", "Loaded resume from Google Drive", fileName)
+    } catch (error) {
+      addLog("error", "Failed to load from Google Drive", error instanceof Error ? error.message : "Unknown error")
+    }
   }
 
   const saveApiKey = () => {
@@ -544,6 +561,15 @@ export function ResumeOptimizer() {
                   >
                     <Upload className="w-4 h-4 mr-2" />
                     Upload Default Resume
+                  </Button>
+
+                  <Button
+                    onClick={loadFromGoogleDrive}
+                    variant="outline"
+                    className="w-full rounded-xl h-10 border-accent/30 hover:bg-accent/10 hover:border-accent/50 bg-transparent justify-start"
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Load from Google Drive
                   </Button>
 
                   {defaultResume ? (
