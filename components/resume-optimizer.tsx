@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -20,6 +20,8 @@ import {
   ChevronDown,
   ChevronRight,
   Settings,
+  Save,
+  Trash2,
 } from "lucide-react"
 
 interface DebugLog {
@@ -57,10 +59,80 @@ export function ResumeOptimizer() {
   const [apiKey, setApiKey] = useState("")
   const [showApiKey, setShowApiKey] = useState(false)
   const [apiKeyExpanded, setApiKeyExpanded] = useState(false)
+  const [savedApiKey, setSavedApiKey] = useState<string | null>(null)
+  const [resumeExpanded, setResumeExpanded] = useState(true)
+  const [defaultResume, setDefaultResume] = useState<{ name: string; data: string } | null>(null)
+  const [useDefaultResume, setUseDefaultResume] = useState(false)
   const [debugLogs, setDebugLogs] = useState<DebugLog[]>([])
   const [showDebugPanel, setShowDebugPanel] = useState(true)
   const [promptSent, setPromptSent] = useState("")
   const [rawResponse, setRawResponse] = useState("")
+
+  useEffect(() => {
+    const saved = localStorage.getItem("defaultResume")
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        setDefaultResume(parsed)
+      } catch {
+        localStorage.removeItem("defaultResume")
+      }
+    }
+    const savedKey = localStorage.getItem("geminiApiKey")
+    if (savedKey) {
+      setSavedApiKey(savedKey)
+      setApiKey(savedKey)
+    }
+  }, [])
+
+  const saveAsDefault = async () => {
+    if (!resumeFile) return
+    const arrayBuffer = await resumeFile.arrayBuffer()
+    const base64 = btoa(new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), ""))
+    const saved = { name: resumeFile.name, data: base64 }
+    localStorage.setItem("defaultResume", JSON.stringify(saved))
+    setDefaultResume(saved)
+    addLog("success", "Resume saved as default", resumeFile.name)
+  }
+
+  const clearDefaultResume = () => {
+    localStorage.removeItem("defaultResume")
+    setDefaultResume(null)
+    addLog("info", "Default resume cleared")
+  }
+
+  const loadDefaultResume = () => {
+    if (!defaultResume) return
+    const binaryString = atob(defaultResume.data)
+    const bytes = new Uint8Array(binaryString.length)
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i)
+    }
+    const blob = new Blob([bytes], {
+      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    })
+    const file = new File([blob], defaultResume.name, {
+      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    })
+    setResumeFile(file)
+    setUseDefaultResume(true)
+    addLog("info", "Using default resume", defaultResume.name)
+  }
+
+  const saveApiKey = () => {
+    if (apiKey.trim()) {
+      localStorage.setItem("geminiApiKey", apiKey.trim())
+      setSavedApiKey(apiKey.trim())
+      addLog("success", "API key saved to browser storage")
+    }
+  }
+
+  const clearSavedApiKey = () => {
+    localStorage.removeItem("geminiApiKey")
+    setSavedApiKey(null)
+    setApiKey("")
+    addLog("info", "Saved API key cleared")
+  }
 
   const addLog = (type: DebugLog["type"], message: string, data?: string) => {
     const timestamp = new Date().toLocaleTimeString("en-US", {
@@ -250,70 +322,175 @@ export function ResumeOptimizer() {
           </p>
         </div>
 
-        <Collapsible open={apiKeyExpanded} onOpenChange={setApiKeyExpanded}>
-          <Card className="border-border/50 bg-card/50 backdrop-blur-sm rounded-3xl shadow-lg shadow-primary/5">
-            <CollapsibleTrigger asChild>
-              <CardHeader className="cursor-pointer hover:bg-primary/5 transition-colors rounded-t-3xl">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2.5 rounded-2xl bg-primary/10 ring-1 ring-primary/20">
-                      <Settings className="w-5 h-5 text-primary" />
+        <div className="space-y-4 mb-8">
+          <Collapsible open={apiKeyExpanded} onOpenChange={setApiKeyExpanded}>
+            <Card className="border-border/50 bg-card/50 backdrop-blur-sm rounded-3xl shadow-lg shadow-primary/5">
+              <CollapsibleTrigger asChild>
+                <CardHeader className="cursor-pointer hover:bg-primary/5 transition-colors rounded-t-3xl">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-2xl bg-primary/10 ring-1 ring-primary/20">
+                        <Settings className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-lg font-semibold text-foreground">API Key Settings</CardTitle>
+                        <CardDescription className="text-muted-foreground/80">
+                          {savedApiKey
+                            ? "Saved API key configured"
+                            : apiKey.trim()
+                              ? "Custom API key entered (not saved)"
+                              : "Using default API key (click to use your own)"}
+                        </CardDescription>
+                      </div>
                     </div>
-                    <div>
-                      <CardTitle className="text-lg font-semibold text-foreground">API Key Settings</CardTitle>
-                      <CardDescription className="text-muted-foreground/80">
-                        {apiKey.trim() ? "Custom API key configured" : "Using default API key (click to use your own)"}
-                      </CardDescription>
-                    </div>
-                  </div>
-                  {apiKeyExpanded ? (
-                    <ChevronDown className="w-5 h-5 text-muted-foreground" />
-                  ) : (
-                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                  )}
-                </div>
-              </CardHeader>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <CardContent className="pt-0">
-                <p className="text-sm text-muted-foreground mb-3">
-                  Optionally enter your own Google Gemini API key. Get one at{" "}
-                  <a
-                    href="https://aistudio.google.com/apikey"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary underline underline-offset-4 hover:text-primary/80 transition-colors"
-                  >
-                    Google AI Studio
-                  </a>
-                </p>
-                <div className="relative">
-                  <Input
-                    type={showApiKey ? "text" : "password"}
-                    placeholder="Leave empty to use default key..."
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    className="pr-12 rounded-2xl h-12 bg-input/50 border-border/50 focus:border-primary/50 focus:ring-primary/20"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl hover:bg-primary/10"
-                    onClick={() => setShowApiKey(!showApiKey)}
-                  >
-                    {showApiKey ? (
-                      <EyeOff className="w-4 h-4 text-muted-foreground" />
+                    {apiKeyExpanded ? (
+                      <ChevronDown className="w-5 h-5 text-muted-foreground" />
                     ) : (
-                      <Eye className="w-4 h-4 text-muted-foreground" />
+                      <ChevronRight className="w-5 h-5 text-muted-foreground" />
                     )}
-                    <span className="sr-only">{showApiKey ? "Hide" : "Show"} API key</span>
-                  </Button>
-                </div>
-              </CardContent>
-            </CollapsibleContent>
-          </Card>
-        </Collapsible>
+                  </div>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent className="pt-0">
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Optionally enter your own Google Gemini API key. Get one at{" "}
+                    <a
+                      href="https://aistudio.google.com/apikey"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline underline-offset-4 hover:text-primary/80 transition-colors"
+                    >
+                      Google AI Studio
+                    </a>
+                  </p>
+                  <div className="relative">
+                    <Input
+                      type={showApiKey ? "text" : "password"}
+                      placeholder="Leave empty to use default key..."
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      className="pr-12 rounded-2xl h-12 bg-input/50 border-border/50 focus:border-primary/50 focus:ring-primary/20"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl hover:bg-primary/10"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                    >
+                      {showApiKey ? (
+                        <EyeOff className="w-4 h-4 text-muted-foreground" />
+                      ) : (
+                        <Eye className="w-4 h-4 text-muted-foreground" />
+                      )}
+                      <span className="sr-only">{showApiKey ? "Hide" : "Show"} API key</span>
+                    </Button>
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={saveApiKey}
+                      disabled={!apiKey.trim() || apiKey.trim() === savedApiKey}
+                      className="rounded-xl bg-transparent"
+                    >
+                      <Save className="w-4 h-4 mr-2" />
+                      Save Key
+                    </Button>
+                    {savedApiKey && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={clearSavedApiKey}
+                        className="rounded-xl text-destructive hover:text-destructive bg-transparent"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Clear Saved
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+
+          <Collapsible open={resumeExpanded} onOpenChange={setResumeExpanded}>
+            <Card className="border-border/50 bg-card/50 backdrop-blur-sm rounded-3xl shadow-lg shadow-primary/5">
+              <CollapsibleTrigger asChild>
+                <CardHeader className="cursor-pointer hover:bg-primary/5 transition-colors rounded-t-3xl">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-2xl bg-accent/10 ring-1 ring-accent/20">
+                        <FileText className="w-5 h-5 text-accent" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-lg font-semibold text-foreground">Default Resume</CardTitle>
+                        <CardDescription className="text-muted-foreground/80">
+                          {defaultResume
+                            ? `Saved: ${defaultResume.name}`
+                            : "Save a resume to use as default (click to expand)"}
+                        </CardDescription>
+                      </div>
+                    </div>
+                    {resumeExpanded ? (
+                      <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                    ) : (
+                      <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                    )}
+                  </div>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent className="pt-0 space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Save a resume to quickly use it for multiple job descriptions without re-uploading.
+                  </p>
+
+                  {defaultResume ? (
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <Button
+                        onClick={loadDefaultResume}
+                        variant="outline"
+                        className="flex-1 rounded-2xl h-11 border-accent/30 hover:bg-accent/10 hover:border-accent/50 bg-transparent"
+                      >
+                        <FileText className="w-4 h-4 mr-2" />
+                        Use "{defaultResume.name}"
+                      </Button>
+                      <Button
+                        onClick={clearDefaultResume}
+                        variant="outline"
+                        className="rounded-2xl h-11 border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50 text-destructive bg-transparent"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Clear Default
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="p-4 rounded-2xl border-2 border-dashed border-border/50 bg-muted/20 text-center">
+                      <p className="text-sm text-muted-foreground/70">
+                        Upload a resume below and click "Save as Default" to save it here
+                      </p>
+                    </div>
+                  )}
+
+                  {resumeFile && !useDefaultResume && (
+                    <Button
+                      onClick={saveAsDefault}
+                      variant="outline"
+                      className="w-full rounded-2xl h-11 border-primary/30 hover:bg-primary/10 hover:border-primary/50 bg-transparent"
+                    >
+                      <Save className="w-4 h-4 mr-2" />
+                      Save "{resumeFile.name}" as Default
+                    </Button>
+                  )}
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+        </div>
 
         <div className="grid lg:grid-cols-2 gap-8">
           <div className="space-y-8">
@@ -341,15 +518,14 @@ export function ResumeOptimizer() {
 
             <Card className="rounded-3xl border-primary/10 bg-card/50 backdrop-blur-sm shadow-xl shadow-primary/5">
               <CardHeader className="pb-4">
-                <CardTitle className="flex items-center gap-3 text-lg">
-                  <div className="p-2 rounded-xl bg-primary/10 ring-1 ring-primary/20">
-                    <FileText className="w-5 h-5 text-primary" />
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg">Upload Resume</CardTitle>
+                    <CardDescription className="text-muted-foreground/80">
+                      Upload your resume in .docx format
+                    </CardDescription>
                   </div>
-                  Upload Resume
-                </CardTitle>
-                <CardDescription className="text-muted-foreground/80">
-                  Upload your resume in .docx format
-                </CardDescription>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-5">
@@ -410,7 +586,7 @@ export function ResumeOptimizer() {
             </Card>
           </div>
 
-          <Card className="h-fit rounded-3xl border-primary/10 bg-card/50 backdrop-blur-sm shadow-xl shadow-primary/5">
+          <Card className="h-fit rounded-3xl border-primary/10 bg-card/50 backdrop-blur-sm shadow-xl shadow-primary/5 overflow-hidden">
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
                 <div>
