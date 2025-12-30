@@ -57,7 +57,7 @@ interface OptimizeResponse {
   }
 }
 
-const GOOGLE_DRIVE_DOC_ID = "1Fug64SHhgdp99G7mhp07uu7X76xAWV4otudRiBwdQ5M"
+const GOOGLE_DRIVE_DOC_ID = "1T4Dz19I4E3EPGqJFi1vg3eAuIbbOWBLv"
 const PAGE_LOAD_TIMESTAMP = Date.now()
 
 export function ResumeOptimizer() {
