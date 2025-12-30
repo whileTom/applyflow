@@ -610,11 +610,10 @@ export function ResumeOptimizer() {
             <Sparkles className="w-10 h-10 text-primary" />
           </div>
           <h1 className="text-5xl font-bold tracking-tight bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent mb-3">
-            Resume Optimizer
+            Tom's Resume Optimizer
           </h1>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto leading-relaxed">
-            Tailor your resume to match any job description using AI. Upload your resume and paste the job description
-            to get started.
+            Because manually tailoring resumes is so 2023. Let the robots do it.
           </p>
           <p className="text-sm text-muted-foreground/70 mt-3">
             Your original DOCX formatting is preserved through semantic XML rewriting.

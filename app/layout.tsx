@@ -8,8 +8,8 @@ const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Resume Optimizer - AI-Powered Resume Customization",
-  description: "Tailor your resume to match any job description using Google Gemini AI",
+  title: "Tom's Resume Optimizer - AI-Powered Resume Customization",
+  description: "Because manually tailoring resumes is so 2023. Let the robots do it.",
   generator: "v0.app",
   icons: {
     icon: [
