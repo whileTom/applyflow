@@ -648,14 +648,14 @@ export function ResumeOptimizer() {
             {/* Upload Resume Card */}
             <Card className="border-border/40 bg-card/50 backdrop-blur-sm shadow-xl shadow-primary/5 rounded-3xl overflow-hidden">
               {/* Collapsible header with click handler */}
-              <CardHeader
-                className="bg-gradient-to-r from-primary/5 to-accent/5 cursor-pointer hover:from-primary/10 hover:to-accent/10 transition-colors"
-                onClick={() => setUploadExpanded(!uploadExpanded)}
-              >
-                <div className="flex items-center justify-between">
+              <CardHeader>
+                <div
+                  className="flex items-center justify-between cursor-pointer rounded-xl p-2 -m-2 transition-colors hover:bg-gradient-to-r hover:from-primary/10 hover:to-accent/10"
+                  onClick={() => setUploadExpanded(!uploadExpanded)}
+                >
                   <div className="flex items-center gap-4">
                     <div className="p-3 rounded-2xl bg-primary/10 ring-1 ring-primary/20 shadow-lg shadow-primary/10">
-                      <FileText className="w-6 h-6 text-primary" />
+                      <Upload className="w-6 h-6 text-primary" />
                     </div>
                     <div>
                       <CardTitle className="text-lg">Upload Resume</CardTitle>
