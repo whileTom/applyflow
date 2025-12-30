@@ -489,10 +489,17 @@ export async function POST(req: Request) {
     const resumeFile = formData.get("resume") as File
     const apiKey = formData.get("apiKey") as string
 
-    if (!apiKey?.trim()) {
-      console.log("[API] Error: Missing API key")
-      return Response.json({ error: "Google Gemini API key is required. Please enter your API key." }, { status: 400 })
+    const effectiveApiKey = apiKey?.trim() || process.env.GOOGLE_GENERATIVE_AI_API_KEY
+
+    if (!effectiveApiKey) {
+      console.log("[API] Error: No API key available (neither provided nor in environment)")
+      return Response.json(
+        { error: "No API key available. Please provide a Google Gemini API key or configure the default key." },
+        { status: 400 },
+      )
     }
+
+    console.log("[API] Using", apiKey?.trim() ? "user-provided" : "default environment", "API key")
 
     if (!jobDescription) {
       console.log("[API] Error: Missing job description")
@@ -554,18 +561,6 @@ Return the optimized resume data following the exact schema structure. Preserve 
     const modelName = "gemini-2.5-flash"
 
     try {
-      const effectiveApiKey = apiKey?.trim() || process.env.GOOGLE_GENERATIVE_AI_API_KEY
-
-      if (!effectiveApiKey) {
-        console.log("[API] Error: No API key available (neither provided nor in environment)")
-        return Response.json(
-          { error: "No API key available. Please provide a Google Gemini API key or configure the default key." },
-          { status: 400 },
-        )
-      }
-
-      console.log("[API] Using", apiKey?.trim() ? "user-provided" : "default environment", "API key")
-
       const google = createGoogleGenerativeAI({ apiKey: effectiveApiKey })
 
       const { object: resumeData } = await generateObject({
