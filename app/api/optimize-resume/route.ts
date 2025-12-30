@@ -1,42 +1,30 @@
 import { generateObject } from "ai"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import mammoth from "mammoth"
-import {
-  Document,
-  Packer,
-  Paragraph,
-  TextRun,
-  AlignmentType,
-  Table,
-  TableRow,
-  TableCell,
-  BorderStyle,
-  WidthType,
-  convertInchesToTwip,
-  ShadingType,
-} from "docx"
+import { Document, Packer, Paragraph, TextRun, AlignmentType, BorderStyle, convertInchesToTwip } from "docx"
 import { z } from "zod"
 
 export const maxDuration = 60
 
 const ResumeSchema = z.object({
   name: z.string().describe("Full name of the candidate"),
-  subtitle: z
-    .string()
-    .describe(
-      "Professional title or tagline (e.g., 'Senior Software Engineer' or 'Marketing Manager | Brand Strategist')",
-    ),
+  subtitle: z.string().describe("Professional title or tagline (e.g., 'Senior Software Engineer | Cloud Architect')"),
   email: z.string().describe("Email address"),
   phone: z.string().describe("Phone number"),
   location: z.string().optional().describe("City, State or location"),
   linkedin: z.string().optional().describe("LinkedIn URL or handle"),
   website: z.string().optional().describe("Personal website or portfolio URL"),
   summary: z.string().describe("Professional summary or objective, 2-4 sentences"),
-  skills: z
-    .array(z.string())
-    .describe(
-      "Array of individual skills - each skill should be ONE skill only, e.g. 'Python', 'Project Management', 'AWS'. Prioritize skills mentioned in the job description.",
-    ),
+  skillCategories: z
+    .array(
+      z.object({
+        category: z
+          .string()
+          .describe("Category name (e.g., 'Programming Languages', 'Tools & Technologies', 'Soft Skills')"),
+        skills: z.array(z.string()).describe("List of skills in this category"),
+      }),
+    )
+    .describe("Skills grouped by category - prioritize skills mentioned in the job description"),
   experience: z
     .array(
       z.object({
@@ -94,17 +82,7 @@ const ResumeSchema = z.object({
 
 type ResumeData = z.infer<typeof ResumeSchema>
 
-const PASTEL_GREENS = [
-  "A8D5BA", // Mint
-  "90C9A7", // Sage
-  "B5E2C9", // Light mint
-  "7FBC8C", // Soft fern
-  "C1E7D4", // Pale seafoam
-  "9FD4B0", // Eucalyptus
-  "85C49B", // Moss
-  "AEDCBE", // Celadon
-]
-const HEADER_GREEN = "5A9E6F" // Slightly darker for headers
+const HEADER_GREEN = "5A9E6F"
 
 function sanitizeText(text: string): string {
   return text
@@ -135,7 +113,7 @@ function generateDocx(resume: ResumeData): Document {
           bold: true,
           size: 36,
           font: "Calibri",
-          color: HEADER_GREEN, // Pine green name
+          color: HEADER_GREEN,
         }),
       ],
       alignment: AlignmentType.CENTER,
@@ -143,6 +121,7 @@ function generateDocx(resume: ResumeData): Document {
     }),
   )
 
+  // Subtitle
   if (resume.subtitle) {
     sections.push(
       new Paragraph({
@@ -183,10 +162,6 @@ function generateDocx(resume: ResumeData): Document {
         spacing: { after: 300 },
       }),
     )
-  }
-
-  const getPastelGreen = (index: number): string => {
-    return PASTEL_GREENS[index % PASTEL_GREENS.length]
   }
 
   // Helper function to add section headers
@@ -231,149 +206,31 @@ function generateDocx(resume: ResumeData): Document {
     )
   }
 
-  if (resume.skills && resume.skills.length > 0) {
+  if (resume.skillCategories && resume.skillCategories.length > 0) {
     addSectionHeader("Key Skills")
 
-    const calculateSkillWidth = (text: string): number => {
-      // Approximate character width in twips (1 twip = 1/20 of a point)
-      const avgCharWidth = 110 // Average character width in twips for Calibri 10pt
-      const padding = 400 // Horizontal padding in twips
-      return Math.max(text.length * avgCharWidth + padding, 600) // Minimum width
+    for (const category of resume.skillCategories) {
+      sections.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: sanitizeText(category.category) + ": ",
+              bold: true,
+              size: 22,
+              font: "Calibri",
+              color: HEADER_GREEN,
+            }),
+            new TextRun({
+              text: category.skills.map(sanitizeText).join(", "),
+              size: 22,
+              font: "Calibri",
+            }),
+          ],
+          spacing: { after: 80 },
+        }),
+      )
     }
 
-    const PAGE_WIDTH = 9360
-    const GAP_WIDTH = 100 // Small gap between pills
-
-    const createSkillRows = (): TableRow[] => {
-      const rows: TableRow[] = []
-      let currentRowCells: TableCell[] = []
-      let currentRowWidth = 0
-
-      resume.skills.forEach((skill, index) => {
-        const skillWidth = calculateSkillWidth(skill)
-        const totalWidth = currentRowWidth + skillWidth + (currentRowCells.length > 0 ? GAP_WIDTH : 0)
-
-        // Start new row if this skill would exceed page width
-        if (totalWidth > PAGE_WIDTH && currentRowCells.length > 0) {
-          // Add centering spacers to current row
-          const remainingSpace = PAGE_WIDTH - currentRowWidth
-          if (remainingSpace > 100) {
-            const spacerWidth = Math.floor(remainingSpace / 2)
-            currentRowCells.unshift(createSpacerCell(spacerWidth))
-            currentRowCells.push(createSpacerCell(spacerWidth))
-          }
-          rows.push(new TableRow({ children: currentRowCells }))
-          // Add small vertical gap row
-          rows.push(createGapRow())
-          currentRowCells = []
-          currentRowWidth = 0
-        }
-
-        // Add gap cell before skill (except first in row)
-        if (currentRowCells.length > 0) {
-          currentRowCells.push(createSpacerCell(GAP_WIDTH))
-          currentRowWidth += GAP_WIDTH
-        }
-
-        // Add skill cell with rounded appearance
-        currentRowCells.push(
-          new TableCell({
-            children: [
-              new Paragraph({
-                children: [
-                  new TextRun({
-                    text: sanitizeText(skill),
-                    size: 20,
-                    font: "Calibri",
-                    color: "2D5A3D", // Dark pine green text
-                    bold: true,
-                  }),
-                ],
-                alignment: AlignmentType.CENTER,
-              }),
-            ],
-            shading: {
-              type: ShadingType.SOLID,
-              color: getPastelGreen(index),
-              fill: getPastelGreen(index),
-            },
-            borders: {
-              top: { style: BorderStyle.SINGLE, size: 20, color: getPastelGreen(index) },
-              bottom: { style: BorderStyle.SINGLE, size: 20, color: getPastelGreen(index) },
-              left: { style: BorderStyle.SINGLE, size: 20, color: getPastelGreen(index) },
-              right: { style: BorderStyle.SINGLE, size: 20, color: getPastelGreen(index) },
-            },
-            margins: {
-              top: convertInchesToTwip(0.05),
-              bottom: convertInchesToTwip(0.05),
-              left: convertInchesToTwip(0.12),
-              right: convertInchesToTwip(0.12),
-            },
-            width: { size: skillWidth, type: WidthType.DXA },
-            verticalAlign: "center" as const,
-          }),
-        )
-        currentRowWidth += skillWidth
-      })
-
-      // Handle last row - center it
-      if (currentRowCells.length > 0) {
-        const remainingSpace = PAGE_WIDTH - currentRowWidth
-        if (remainingSpace > 100) {
-          const spacerWidth = Math.floor(remainingSpace / 2)
-          currentRowCells.unshift(createSpacerCell(spacerWidth))
-          currentRowCells.push(createSpacerCell(spacerWidth))
-        }
-        rows.push(new TableRow({ children: currentRowCells }))
-      }
-
-      return rows
-    }
-
-    const createSpacerCell = (width: number): TableCell =>
-      new TableCell({
-        children: [new Paragraph({ children: [] })],
-        borders: {
-          top: { style: BorderStyle.NIL },
-          bottom: { style: BorderStyle.NIL },
-          left: { style: BorderStyle.NIL },
-          right: { style: BorderStyle.NIL },
-        },
-        width: { size: width, type: WidthType.DXA },
-      })
-
-    const createGapRow = (): TableRow =>
-      new TableRow({
-        children: [
-          new TableCell({
-            children: [new Paragraph({ children: [] })],
-            borders: {
-              top: { style: BorderStyle.NIL },
-              bottom: { style: BorderStyle.NIL },
-              left: { style: BorderStyle.NIL },
-              right: { style: BorderStyle.NIL },
-            },
-          }),
-        ],
-        height: { value: convertInchesToTwip(0.08), rule: "exact" as const },
-      })
-
-    const skillsTable = new Table({
-      rows: createSkillRows(),
-      width: { size: 100, type: WidthType.PERCENTAGE },
-      borders: {
-        top: { style: BorderStyle.NIL },
-        bottom: { style: BorderStyle.NIL },
-        left: { style: BorderStyle.NIL },
-        right: { style: BorderStyle.NIL },
-        insideHorizontal: { style: BorderStyle.NIL },
-        insideVertical: { style: BorderStyle.NIL },
-      },
-      alignment: AlignmentType.CENTER,
-    })
-
-    sections.push(new Paragraph({ spacing: { after: 80 } }))
-    sections.push(skillsTable as unknown as Paragraph)
     sections.push(new Paragraph({ spacing: { after: 150 } }))
   }
 
@@ -673,16 +530,16 @@ export async function POST(req: Request) {
 TASK: Analyze the provided resume and job description, then return a restructured and optimized version of the resume as structured JSON data.
 
 REQUIREMENTS:
-1. Extract and enhance all information from the original resume
-2. Optimize content to align with the job description requirements exactly
-3. Use high-impact action verbs and quantified achievements
-4. Prioritize skills that match the job description - list most relevant skills first
-5. Each skill in the skills array MUST be exactly ONE skill (e.g., "Python", "Project Management", "AWS") - never combine multiple skills
+1. PRESERVE THE ORIGINAL RESUME FORMAT AND STRUCTURE as much as possible - follow the same section ordering and style
+2. Extract and enhance all information from the original resume
+3. Optimize content to align with the job description requirements
+4. Use high-impact action verbs and quantified achievements
+5. GROUP SKILLS BY CATEGORY (e.g., "Programming Languages", "Cloud & DevOps", "Frameworks", "Soft Skills") - prioritize categories and skills mentioned in the job description
 6. Add relevant certifications, projects, or sections if they would strengthen the application
 7. Enhance bullet points with metrics and results where possible
 8. Keep job titles, company names, and dates accurate from the original
 9. Write in professional, clear language without special characters or symbols that might not render properly
-10. Create a compelling subtitle/professional title that appears under the name (e.g., "Senior Software Engineer | Cloud Architect" or "Marketing Director | Brand Strategist")
+10. Create a compelling subtitle/professional title that appears under the name
 
 JOB DESCRIPTION:
 ${jobDescription}
@@ -690,7 +547,7 @@ ${jobDescription}
 ORIGINAL RESUME:
 ${resumeText}
 
-Return the optimized resume data following the exact schema structure. Be thorough and create a polished, professional resume.`
+Return the optimized resume data following the exact schema structure. Preserve the original formatting style while enhancing the content.`
 
     console.log("[API] Calling Google Gemini API for structured output...")
     const aiStartTime = Date.now()
@@ -708,7 +565,7 @@ Return the optimized resume data following the exact schema structure. Be thorou
 
       const aiProcessingTime = Date.now() - aiStartTime
       console.log("[API] Structured response received in", aiProcessingTime, "ms")
-      console.log("[API] Skills count:", resumeData.skills?.length || 0)
+      console.log("[API] Skill categories count:", resumeData.skillCategories?.length || 0)
       console.log("[API] Experience count:", resumeData.experience?.length || 0)
 
       const doc = generateDocx(resumeData)
@@ -731,7 +588,7 @@ Return the optimized resume data following the exact schema structure. Be thorou
           processingTime: aiProcessingTime,
           totalTime: totalProcessingTime,
           model: `google/${modelName}`,
-          skillsCount: resumeData.skills?.length || 0,
+          skillCategoriesCount: resumeData.skillCategories?.length || 0,
           experienceCount: resumeData.experience?.length || 0,
           extractedResumePreview: resumeText.substring(0, 500) + (resumeText.length > 500 ? "..." : ""),
         },
@@ -773,9 +630,11 @@ function formatForDisplay(resume: ResumeData): string {
     lines.push("")
   }
 
-  if (resume.skills?.length) {
+  if (resume.skillCategories?.length) {
     lines.push("KEY SKILLS")
-    lines.push(resume.skills.join(" • "))
+    for (const category of resume.skillCategories) {
+      lines.push(`${category.category}: ${category.skills.join(", ")}`)
+    }
     lines.push("")
   }
 
