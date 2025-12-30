@@ -99,22 +99,23 @@ export function ResumeOptimizer() {
           localStorage.removeItem("defaultResume")
         }
       } else {
-        // Try to load from public/resume folder
         try {
-          const response = await fetch("/resume/default-resume.docx")
+          const response = await fetch("/resume/default-resume.json")
           if (response.ok) {
-            const blob = await response.blob()
-            const arrayBuffer = await blob.arrayBuffer()
-            const base64 = btoa(
-              new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), ""),
-            )
-            setDefaultResume({ name: "default-resume.docx", data: base64 })
-            const file = new File([blob], "default-resume.docx", {
+            const jsonData = await response.json()
+            const binary = atob(jsonData.data)
+            const bytes = new Uint8Array(binary.length)
+            for (let i = 0; i < binary.length; i++) {
+              bytes[i] = binary.charCodeAt(i)
+            }
+            const fileName = jsonData.originalName || "default-resume.docx"
+            setDefaultResume({ name: fileName, data: jsonData.data })
+            const file = new File([bytes], fileName, {
               type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             })
             setResumeFile(file)
             setUseDefaultResume(true)
-            addLog("info", "Using default resume", "default-resume.docx")
+            addLog("info", "Using default resume", fileName)
           }
         } catch {
           // No default resume available
@@ -576,7 +577,7 @@ export function ResumeOptimizer() {
                   placeholder="Paste the job description here..."
                   value={jobDescription}
                   onChange={(e) => setJobDescription(e.target.value)}
-                  className="min-h-[200px] resize-none rounded-2xl bg-input/50 border-border/50 focus:border-primary/50 focus:ring-primary/20"
+                  className="min-h-[200px] max-h-[50vh] resize-y overflow-y-auto rounded-2xl bg-input/50 border-border/50 focus:border-primary/50 focus:ring-primary/20"
                 />
               </CardContent>
             </Card>

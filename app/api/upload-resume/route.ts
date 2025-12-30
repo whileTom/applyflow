@@ -27,11 +27,18 @@ export async function POST(request: NextRequest) {
       await mkdir(resumeDir, { recursive: true })
     }
 
-    // Save as the default resume
-    const filePath = join(resumeDir, "default-resume.docx")
-    await writeFile(filePath, buffer)
+    const base64Data = buffer.toString("base64")
+    const safeData = {
+      originalName: file.name.replace(/[^a-zA-Z0-9._-]/g, "_"), // Sanitize filename
+      data: base64Data,
+      uploadedAt: new Date().toISOString(),
+      size: buffer.length,
+    }
 
-    console.log(`[Upload] Default resume saved: ${file.name} (${buffer.length} bytes)`)
+    const filePath = join(resumeDir, "default-resume.json")
+    await writeFile(filePath, JSON.stringify(safeData, null, 2))
+
+    console.log(`[Upload] Default resume saved as JSON: ${file.name} (${buffer.length} bytes)`)
 
     return NextResponse.json({
       success: true,
