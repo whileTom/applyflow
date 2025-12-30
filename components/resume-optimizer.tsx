@@ -439,7 +439,7 @@ export function ResumeOptimizer() {
             <h1 className="text-4xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
               Tom&apos;s Resume Optimizer
             </h1>
-            <p className="text-muted-foreground/80 mt-2">Because manually tailoring resumes is so last century</p>
+            <p className="text-muted-foreground/80 mt-2">fight 🤖🔥 with 🤖🔥</p>
           </div>
 
           {/* Options Dialog */}
