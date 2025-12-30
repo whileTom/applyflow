@@ -640,7 +640,7 @@ export function ResumeOptimizer() {
                   placeholder="Paste the job description here..."
                   value={jobDescription}
                   onChange={(e) => setJobDescription(e.target.value)}
-                  className="min-h-[200px] max-h-[50vh] resize-y overflow-y-auto rounded-2xl bg-input/50 border-border/50 focus:border-primary/50 focus:ring-primary/20"
+                  className="h-[200px] rounded-2xl bg-input/50 border-border/50 focus:border-primary/50 focus:ring-primary/20 resize-none overflow-y-auto"
                 />
               </CardContent>
             </Card>
