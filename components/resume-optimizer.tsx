@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-
+import { useRef } from "react"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -76,6 +76,7 @@ export function ResumeOptimizer() {
   const [promptSent, setPromptSent] = useState("")
   const [rawResponse, setRawResponse] = useState("")
   const [optionsOpen, setOptionsOpen] = useState(false)
+  const dialogFileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const loadDefaultResume = async () => {
@@ -374,6 +375,54 @@ export function ResumeOptimizer() {
     }
   }
 
+  const handleDialogFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.name.endsWith(".docx")) {
+      addLog("error", "Invalid file type", "Please upload a .docx file")
+      return
+    }
+
+    try {
+      // Upload to server
+      const formData = new FormData()
+      formData.append("resume", file)
+
+      const response = await fetch("/api/upload-resume", {
+        method: "POST",
+        body: formData,
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to upload resume")
+      }
+
+      // Save locally
+      const arrayBuffer = await file.arrayBuffer()
+      const base64 = btoa(new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), ""))
+      const saved = { name: file.name, data: base64 }
+      localStorage.setItem("defaultResume", JSON.stringify(saved))
+      setDefaultResume(saved)
+
+      // Also set as current file
+      setResumeFile(file)
+      setUseDefaultResume(true)
+
+      addLog("success", "Default resume uploaded and saved", file.name)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Unknown error"
+      addLog("error", "Failed to upload default resume", errorMessage)
+    }
+
+    // Reset input
+    if (dialogFileInputRef.current) {
+      dialogFileInputRef.current.value = ""
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
       <div className="container mx-auto py-10 px-4 max-w-7xl">
@@ -494,6 +543,23 @@ export function ResumeOptimizer() {
                     </div>
                   </div>
 
+                  <input
+                    type="file"
+                    ref={dialogFileInputRef}
+                    onChange={handleDialogFileUpload}
+                    accept=".docx"
+                    className="hidden"
+                  />
+
+                  <Button
+                    onClick={() => dialogFileInputRef.current?.click()}
+                    variant="outline"
+                    className="w-full rounded-xl h-10 border-accent/30 hover:bg-accent/10 hover:border-accent/50 bg-transparent justify-start"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload Default Resume
+                  </Button>
+
                   {defaultResume ? (
                     <div className="flex flex-col gap-2">
                       <Button
@@ -518,23 +584,8 @@ export function ResumeOptimizer() {
                     </div>
                   ) : (
                     <div className="p-3 rounded-xl border border-dashed border-border/50 bg-muted/20 text-center">
-                      <p className="text-xs text-muted-foreground/70">
-                        Upload a resume below and click "Save as Default"
-                      </p>
+                      <p className="text-xs text-muted-foreground/70">No default resume saved yet</p>
                     </div>
-                  )}
-
-                  {resumeFile && !useDefaultResume && (
-                    <Button
-                      onClick={() => {
-                        saveAsDefault()
-                      }}
-                      variant="outline"
-                      className="w-full rounded-xl h-10 border-primary/30 hover:bg-primary/10 hover:border-primary/50 bg-transparent justify-start"
-                    >
-                      <Save className="w-4 h-4 mr-2" />
-                      Save "{resumeFile.name}" as Default
-                    </Button>
                   )}
                 </div>
               </div>
