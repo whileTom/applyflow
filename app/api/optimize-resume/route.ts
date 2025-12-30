@@ -13,7 +13,6 @@ import {
   BorderStyle,
   WidthType,
   convertInchesToTwip,
-  TableBorders,
   ShadingType,
 } from "docx"
 import { z } from "zod"
@@ -235,111 +234,147 @@ function generateDocx(resume: ResumeData): Document {
   if (resume.skills && resume.skills.length > 0) {
     addSectionHeader("Key Skills")
 
-    const skillCells: TableCell[] = resume.skills.map(
-      (skill, index) =>
-        new TableCell({
-          children: [
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: sanitizeText(skill),
-                  size: 20,
-                  font: "Calibri",
-                  color: "3D6B4A", // Dark green text for contrast
-                }),
-              ],
-              alignment: AlignmentType.CENTER,
-            }),
-          ],
-          shading: {
-            type: ShadingType.SOLID,
-            color: getPastelGreen(index),
-            fill: getPastelGreen(index),
-          },
-          borders: {
-            top: { style: BorderStyle.SINGLE, size: 12, color: getPastelGreen(index) },
-            bottom: { style: BorderStyle.SINGLE, size: 12, color: getPastelGreen(index) },
-            left: { style: BorderStyle.SINGLE, size: 12, color: getPastelGreen(index) },
-            right: { style: BorderStyle.SINGLE, size: 12, color: getPastelGreen(index) },
-          },
-          margins: {
-            top: convertInchesToTwip(0.06),
-            bottom: convertInchesToTwip(0.06),
-            left: convertInchesToTwip(0.15),
-            right: convertInchesToTwip(0.15),
-          },
-          width: { size: WidthType.AUTO, type: WidthType.AUTO },
-        }),
-    )
-
-    const skillRows: TableRow[] = []
-    let currentIndex = 0
-    const rowPatterns = [5, 4, 5, 4, 5] // Alternating pattern for visual interest
-
-    while (currentIndex < skillCells.length) {
-      const patternIndex = skillRows.length % rowPatterns.length
-      const skillsInThisRow = Math.min(rowPatterns[patternIndex], skillCells.length - currentIndex)
-      const rowCells = skillCells.slice(currentIndex, currentIndex + skillsInThisRow)
-
-      const spacedCells: TableCell[] = []
-      rowCells.forEach((cell, idx) => {
-        spacedCells.push(cell)
-        if (idx < rowCells.length - 1) {
-          spacedCells.push(
-            new TableCell({
-              children: [new Paragraph({ children: [] })],
-              borders: {
-                top: { style: BorderStyle.NIL },
-                bottom: { style: BorderStyle.NIL },
-                left: { style: BorderStyle.NIL },
-                right: { style: BorderStyle.NIL },
-              },
-              width: { size: 150, type: WidthType.DXA },
-            }),
-          )
-        }
-      })
-
-      skillRows.push(
-        new TableRow({
-          children: spacedCells,
-          height: { value: convertInchesToTwip(0.35), rule: "atLeast" as const },
-        }),
-      )
-
-      if (currentIndex + skillsInThisRow < skillCells.length) {
-        skillRows.push(
-          new TableRow({
-            children: [
-              new TableCell({
-                children: [new Paragraph({ children: [] })],
-                borders: {
-                  top: { style: BorderStyle.NIL },
-                  bottom: { style: BorderStyle.NIL },
-                  left: { style: BorderStyle.NIL },
-                  right: { style: BorderStyle.NIL },
-                },
-                columnSpan: spacedCells.length,
-              }),
-            ],
-            height: { value: convertInchesToTwip(0.1), rule: "exact" as const },
-          }),
-        )
-      }
-
-      currentIndex += skillsInThisRow
+    const calculateSkillWidth = (text: string): number => {
+      // Approximate character width in twips (1 twip = 1/20 of a point)
+      const avgCharWidth = 110 // Average character width in twips for Calibri 10pt
+      const padding = 400 // Horizontal padding in twips
+      return Math.max(text.length * avgCharWidth + padding, 600) // Minimum width
     }
 
+    const PAGE_WIDTH = 9360
+    const GAP_WIDTH = 100 // Small gap between pills
+
+    const createSkillRows = (): TableRow[] => {
+      const rows: TableRow[] = []
+      let currentRowCells: TableCell[] = []
+      let currentRowWidth = 0
+
+      resume.skills.forEach((skill, index) => {
+        const skillWidth = calculateSkillWidth(skill)
+        const totalWidth = currentRowWidth + skillWidth + (currentRowCells.length > 0 ? GAP_WIDTH : 0)
+
+        // Start new row if this skill would exceed page width
+        if (totalWidth > PAGE_WIDTH && currentRowCells.length > 0) {
+          // Add centering spacers to current row
+          const remainingSpace = PAGE_WIDTH - currentRowWidth
+          if (remainingSpace > 100) {
+            const spacerWidth = Math.floor(remainingSpace / 2)
+            currentRowCells.unshift(createSpacerCell(spacerWidth))
+            currentRowCells.push(createSpacerCell(spacerWidth))
+          }
+          rows.push(new TableRow({ children: currentRowCells }))
+          // Add small vertical gap row
+          rows.push(createGapRow())
+          currentRowCells = []
+          currentRowWidth = 0
+        }
+
+        // Add gap cell before skill (except first in row)
+        if (currentRowCells.length > 0) {
+          currentRowCells.push(createSpacerCell(GAP_WIDTH))
+          currentRowWidth += GAP_WIDTH
+        }
+
+        // Add skill cell with rounded appearance
+        currentRowCells.push(
+          new TableCell({
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: sanitizeText(skill),
+                    size: 20,
+                    font: "Calibri",
+                    color: "2D5A3D", // Dark pine green text
+                    bold: true,
+                  }),
+                ],
+                alignment: AlignmentType.CENTER,
+              }),
+            ],
+            shading: {
+              type: ShadingType.SOLID,
+              color: getPastelGreen(index),
+              fill: getPastelGreen(index),
+            },
+            borders: {
+              top: { style: BorderStyle.SINGLE, size: 20, color: getPastelGreen(index) },
+              bottom: { style: BorderStyle.SINGLE, size: 20, color: getPastelGreen(index) },
+              left: { style: BorderStyle.SINGLE, size: 20, color: getPastelGreen(index) },
+              right: { style: BorderStyle.SINGLE, size: 20, color: getPastelGreen(index) },
+            },
+            margins: {
+              top: convertInchesToTwip(0.05),
+              bottom: convertInchesToTwip(0.05),
+              left: convertInchesToTwip(0.12),
+              right: convertInchesToTwip(0.12),
+            },
+            width: { size: skillWidth, type: WidthType.DXA },
+            verticalAlign: "center" as const,
+          }),
+        )
+        currentRowWidth += skillWidth
+      })
+
+      // Handle last row - center it
+      if (currentRowCells.length > 0) {
+        const remainingSpace = PAGE_WIDTH - currentRowWidth
+        if (remainingSpace > 100) {
+          const spacerWidth = Math.floor(remainingSpace / 2)
+          currentRowCells.unshift(createSpacerCell(spacerWidth))
+          currentRowCells.push(createSpacerCell(spacerWidth))
+        }
+        rows.push(new TableRow({ children: currentRowCells }))
+      }
+
+      return rows
+    }
+
+    const createSpacerCell = (width: number): TableCell =>
+      new TableCell({
+        children: [new Paragraph({ children: [] })],
+        borders: {
+          top: { style: BorderStyle.NIL },
+          bottom: { style: BorderStyle.NIL },
+          left: { style: BorderStyle.NIL },
+          right: { style: BorderStyle.NIL },
+        },
+        width: { size: width, type: WidthType.DXA },
+      })
+
+    const createGapRow = (): TableRow =>
+      new TableRow({
+        children: [
+          new TableCell({
+            children: [new Paragraph({ children: [] })],
+            borders: {
+              top: { style: BorderStyle.NIL },
+              bottom: { style: BorderStyle.NIL },
+              left: { style: BorderStyle.NIL },
+              right: { style: BorderStyle.NIL },
+            },
+          }),
+        ],
+        height: { value: convertInchesToTwip(0.08), rule: "exact" as const },
+      })
+
     const skillsTable = new Table({
-      rows: skillRows,
+      rows: createSkillRows(),
       width: { size: 100, type: WidthType.PERCENTAGE },
-      borders: TableBorders.NONE,
+      borders: {
+        top: { style: BorderStyle.NIL },
+        bottom: { style: BorderStyle.NIL },
+        left: { style: BorderStyle.NIL },
+        right: { style: BorderStyle.NIL },
+        insideHorizontal: { style: BorderStyle.NIL },
+        insideVertical: { style: BorderStyle.NIL },
+      },
       alignment: AlignmentType.CENTER,
     })
 
-    sections.push(new Paragraph({ spacing: { after: 100 } }))
+    sections.push(new Paragraph({ spacing: { after: 80 } }))
     sections.push(skillsTable as unknown as Paragraph)
-    sections.push(new Paragraph({ spacing: { after: 200 } }))
+    sections.push(new Paragraph({ spacing: { after: 150 } }))
   }
 
   // Experience Section
