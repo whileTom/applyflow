@@ -647,7 +647,7 @@ export function ResumeOptimizer() {
               {/* Collapsible header with click handler */}
               <CardHeader>
                 <div
-                  className="flex items-center justify-between cursor-pointer rounded-xl p-2 -m-2 transition-colors hover:bg-gradient-to-r hover:from-primary/10 hover:to-accent/10"
+                  className="flex items-center justify-between cursor-pointer rounded-xl p-2 -m-2 transition-colors"
                   onClick={() => setUploadExpanded(!uploadExpanded)}
                 >
                   <div className="flex items-center gap-4">
@@ -784,11 +784,11 @@ export function ResumeOptimizer() {
         </div>
 
         <Card className="mt-8 rounded-3xl border-primary/10 bg-card/50 backdrop-blur-sm shadow-xl shadow-primary/5 overflow-hidden">
-          <CardHeader
-            className="cursor-pointer hover:bg-primary/5 transition-colors"
-            onClick={() => setShowDebugPanel(!showDebugPanel)}
-          >
-            <div className="flex items-center justify-between">
+          <CardHeader>
+            <div
+              className="flex items-center justify-between cursor-pointer rounded-xl p-2 -m-2 hover:bg-gradient-to-r hover:from-primary/10 hover:to-accent/10 transition-colors"
+              onClick={() => setShowDebugPanel(!showDebugPanel)}
+            >
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-xl bg-accent/10 ring-1 ring-accent/20">
                   <Info className="w-5 h-5 text-accent" />
@@ -817,7 +817,7 @@ export function ResumeOptimizer() {
                 </div>
               </div>
             </div>
-            <CardDescription className="text-muted-foreground/80">
+            <CardDescription className="text-muted-foreground/80 mt-2">
               View detailed information about XML parsing, AI request, and response
             </CardDescription>
           </CardHeader>
