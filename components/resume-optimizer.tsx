@@ -60,24 +60,43 @@ export function ResumeOptimizer() {
   const [showApiKey, setShowApiKey] = useState(false)
   const [apiKeyExpanded, setApiKeyExpanded] = useState(false)
   const [savedApiKey, setSavedApiKey] = useState<string | null>(null)
-  const [resumeExpanded, setResumeExpanded] = useState(true)
+  const [resumeExpanded, setResumeExpanded] = useState(false)
   const [defaultResume, setDefaultResume] = useState<{ name: string; data: string } | null>(null)
   const [useDefaultResume, setUseDefaultResume] = useState(false)
   const [debugLogs, setDebugLogs] = useState<DebugLog[]>([])
-  const [showDebugPanel, setShowDebugPanel] = useState(true)
+  const [showDebugPanel, setShowDebugPanel] = useState(false)
   const [promptSent, setPromptSent] = useState("")
   const [rawResponse, setRawResponse] = useState("")
 
   useEffect(() => {
-    const saved = localStorage.getItem("defaultResume")
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved)
-        setDefaultResume(parsed)
-      } catch {
-        localStorage.removeItem("defaultResume")
+    const loadDefaultResume = async () => {
+      const saved = localStorage.getItem("defaultResume")
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved)
+          setDefaultResume(parsed)
+        } catch {
+          localStorage.removeItem("defaultResume")
+        }
+      } else {
+        // Try to load from public/resume folder
+        try {
+          const response = await fetch("/resume/default-resume.docx")
+          if (response.ok) {
+            const blob = await response.blob()
+            const arrayBuffer = await blob.arrayBuffer()
+            const base64 = btoa(
+              new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), ""),
+            )
+            setDefaultResume({ name: "default-resume.docx", data: base64 })
+          }
+        } catch {
+          // No default resume available
+        }
       }
     }
+    loadDefaultResume()
+
     const savedKey = localStorage.getItem("geminiApiKey")
     if (savedKey) {
       setSavedApiKey(savedKey)
