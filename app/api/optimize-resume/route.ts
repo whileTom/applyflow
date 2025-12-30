@@ -1,13 +1,31 @@
 import { generateObject } from "ai"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import mammoth from "mammoth"
-import { Document, Packer, Paragraph, TextRun, AlignmentType, BorderStyle, convertInchesToTwip } from "docx"
+import {
+  Document,
+  Packer,
+  Paragraph,
+  TextRun,
+  AlignmentType,
+  BorderStyle,
+  convertInchesToTwip,
+  Table,
+  TableRow,
+  TableCell,
+  WidthType,
+  TableBorders,
+} from "docx"
 import { z } from "zod"
 
 export const maxDuration = 60
 
 const ResumeSchema = z.object({
   name: z.string().describe("Full name of the candidate"),
+  subtitle: z
+    .string()
+    .describe(
+      "Professional title or tagline (e.g., 'Senior Software Engineer' or 'Marketing Manager | Brand Strategist')",
+    ),
   email: z.string().describe("Email address"),
   phone: z.string().describe("Phone number"),
   location: z.string().optional().describe("City, State or location"),
@@ -76,22 +94,21 @@ const ResumeSchema = z.object({
 
 type ResumeData = z.infer<typeof ResumeSchema>
 
+const PINE_GREEN = "2D5A3D"
+
 function sanitizeText(text: string): string {
   return text
-    .replace(/[\u2018\u2019]/g, "'") // Smart single quotes to regular
-    .replace(/[\u201C\u201D]/g, '"') // Smart double quotes to regular
-    .replace(/\u2026/g, "...") // Ellipsis
-    .replace(/\u2013/g, "-") // En dash
-    .replace(/\u2014/g, "--") // Em dash
-    .replace(/\u00A0/g, " ") // Non-breaking space
-    .replace(/\u2022/g, "•") // Bullet point (keep as is, it's standard)
-    .replace(/[\uFFFD]/g, "") // Replacement character (remove)
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/\u2026/g, "...")
+    .replace(/\u2013/g, "-")
+    .replace(/\u2014/g, "--")
+    .replace(/\u00A0/g, " ")
+    .replace(/\u2022/g, "•")
+    .replace(/[\uFFFD]/g, "")
     .replace(
       /[^\x00-\x7F\u00A0-\u00FF\u0100-\u017F\u2022\u2713\u2714\u2715\u2716\u2717\u2718\u25A0\u25B6\u25CF\u2605\u2606]/g,
-      (char) => {
-        // Replace other non-standard characters with relevant symbols
-        return ""
-      },
+      "",
     )
     .trim()
 }
@@ -106,14 +123,33 @@ function generateDocx(resume: ResumeData): Document {
         new TextRun({
           text: sanitizeText(resume.name),
           bold: true,
-          size: 36,
+          size: 40,
           font: "Calibri",
+          color: PINE_GREEN, // Pine green name
         }),
       ],
       alignment: AlignmentType.CENTER,
-      spacing: { after: 100 },
+      spacing: { after: 60 },
     }),
   )
+
+  if (resume.subtitle) {
+    sections.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: sanitizeText(resume.subtitle),
+            size: 24,
+            font: "Calibri",
+            color: "555555",
+            italics: true,
+          }),
+        ],
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 150 },
+      }),
+    )
+  }
 
   // Contact Info Line
   const contactParts: string[] = []
@@ -139,7 +175,6 @@ function generateDocx(resume: ResumeData): Document {
     )
   }
 
-  // Helper for section headers
   const addSectionHeader = (title: string) => {
     sections.push(
       new Paragraph({
@@ -149,14 +184,15 @@ function generateDocx(resume: ResumeData): Document {
             bold: true,
             size: 24,
             font: "Calibri",
+            color: PINE_GREEN,
           }),
         ],
         border: {
           bottom: {
-            color: "000000",
+            color: PINE_GREEN,
             space: 1,
             style: BorderStyle.SINGLE,
-            size: 6,
+            size: 8,
           },
         },
         spacing: { before: 300, after: 150 },
@@ -181,23 +217,75 @@ function generateDocx(resume: ResumeData): Document {
     )
   }
 
-  // Skills Section - Each skill as individual item
   if (resume.skills && resume.skills.length > 0) {
     addSectionHeader("Key Skills")
 
-    // Create skills as a comma-separated line for clean formatting
-    sections.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: resume.skills.map((s) => sanitizeText(s)).join("  •  "),
-            size: 22,
-            font: "Calibri",
+    // Create skill bubbles as a table with bordered cells
+    const skillsPerRow = 4
+    const skillRows: TableRow[] = []
+
+    for (let i = 0; i < resume.skills.length; i += skillsPerRow) {
+      const rowSkills = resume.skills.slice(i, i + skillsPerRow)
+      const cells: TableCell[] = rowSkills.map(
+        (skill) =>
+          new TableCell({
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: sanitizeText(skill),
+                    size: 20,
+                    font: "Calibri",
+                    color: PINE_GREEN,
+                  }),
+                ],
+                alignment: AlignmentType.CENTER,
+              }),
+            ],
+            borders: {
+              top: { style: BorderStyle.SINGLE, size: 8, color: PINE_GREEN },
+              bottom: { style: BorderStyle.SINGLE, size: 8, color: PINE_GREEN },
+              left: { style: BorderStyle.SINGLE, size: 8, color: PINE_GREEN },
+              right: { style: BorderStyle.SINGLE, size: 8, color: PINE_GREEN },
+            },
+            margins: {
+              top: convertInchesToTwip(0.05),
+              bottom: convertInchesToTwip(0.05),
+              left: convertInchesToTwip(0.1),
+              right: convertInchesToTwip(0.1),
+            },
+            width: { size: 25, type: WidthType.PERCENTAGE },
           }),
-        ],
-        spacing: { after: 200 },
-      }),
-    )
+      )
+
+      // Fill remaining cells with empty cells if row is not complete
+      while (cells.length < skillsPerRow) {
+        cells.push(
+          new TableCell({
+            children: [new Paragraph({ children: [] })],
+            borders: {
+              top: { style: BorderStyle.NIL },
+              bottom: { style: BorderStyle.NIL },
+              left: { style: BorderStyle.NIL },
+              right: { style: BorderStyle.NIL },
+            },
+            width: { size: 25, type: WidthType.PERCENTAGE },
+          }),
+        )
+      }
+
+      skillRows.push(new TableRow({ children: cells }))
+    }
+
+    const skillsTable = new Table({
+      rows: skillRows,
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: TableBorders.NONE,
+    })
+
+    sections.push(new Paragraph({ spacing: { after: 100 } }))
+    sections.push(skillsTable as unknown as Paragraph)
+    sections.push(new Paragraph({ spacing: { after: 200 } }))
   }
 
   // Experience Section
@@ -205,7 +293,6 @@ function generateDocx(resume: ResumeData): Document {
     addSectionHeader("Professional Experience")
 
     for (const exp of resume.experience) {
-      // Job title and company
       sections.push(
         new Paragraph({
           children: [
@@ -240,7 +327,6 @@ function generateDocx(resume: ResumeData): Document {
         }),
       )
 
-      // Dates
       sections.push(
         new Paragraph({
           children: [
@@ -255,7 +341,6 @@ function generateDocx(resume: ResumeData): Document {
         }),
       )
 
-      // Bullets
       for (const bullet of exp.bullets) {
         sections.push(
           new Paragraph({
@@ -381,7 +466,7 @@ function generateDocx(resume: ResumeData): Document {
                     text: "  |  " + sanitizeText(project.url),
                     size: 20,
                     font: "Calibri",
-                    color: "0066CC",
+                    color: PINE_GREEN,
                   }),
                 ]
               : []),
@@ -475,7 +560,6 @@ export async function POST(req: Request) {
 
     console.log("[API] Inputs validated. File:", resumeFile.name, "Size:", resumeFile.size, "bytes")
 
-    // Extract text using mammoth
     let resumeText: string
     try {
       const arrayBuffer = await resumeFile.arrayBuffer()
@@ -509,6 +593,7 @@ REQUIREMENTS:
 7. Enhance bullet points with metrics and results where possible
 8. Keep job titles, company names, and dates accurate from the original
 9. Write in professional, clear language without special characters or symbols that might not render properly
+10. Create a compelling subtitle/professional title that appears under the name (e.g., "Senior Software Engineer | Cloud Architect" or "Marketing Director | Brand Strategist")
 
 JOB DESCRIPTION:
 ${jobDescription}
@@ -537,12 +622,10 @@ Return the optimized resume data following the exact schema structure. Be thorou
       console.log("[API] Skills count:", resumeData.skills?.length || 0)
       console.log("[API] Experience count:", resumeData.experience?.length || 0)
 
-      // Generate DOCX
       const doc = generateDocx(resumeData)
       const docxBuffer = await Packer.toBuffer(doc)
       const docxBase64 = docxBuffer.toString("base64")
 
-      // Format for display
       const displayText = formatForDisplay(resumeData)
 
       const totalProcessingTime = Date.now() - requestStartTime
@@ -588,6 +671,7 @@ function formatForDisplay(resume: ResumeData): string {
   const lines: string[] = []
 
   lines.push(resume.name)
+  if (resume.subtitle) lines.push(resume.subtitle)
 
   const contact = [resume.email, resume.phone, resume.location, resume.linkedin, resume.website].filter(Boolean)
   if (contact.length) lines.push(contact.join(" | "))
@@ -638,9 +722,9 @@ function formatForDisplay(resume: ResumeData): string {
 
   if (resume.projects?.length) {
     lines.push("PROJECTS")
-    for (const proj of resume.projects) {
-      lines.push(`${proj.name}${proj.url ? ` | ${proj.url}` : ""}`)
-      lines.push(`• ${proj.description}`)
+    for (const project of resume.projects) {
+      lines.push(`${project.name}${project.url ? ` | ${project.url}` : ""}`)
+      lines.push(`• ${project.description}`)
       lines.push("")
     }
   }
