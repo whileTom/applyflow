@@ -146,7 +146,7 @@ export function HistoryDialog() {
           <span className="sr-only">History</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-[95vw] max-h-[90vh] w-full rounded-3xl bg-card/95 backdrop-blur-xl border-border/50 overflow-hidden flex flex-col">
+      <DialogContent className="max-w-[95vw] max-h-[90vh] min-w-[900px] w-full rounded-3xl bg-card/95 backdrop-blur-xl border-border/50 overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold flex items-center gap-2">
             <History className="w-5 h-5 text-primary" />
@@ -176,20 +176,20 @@ export function HistoryDialog() {
               <p className="text-sm mt-1">Your optimized resumes will appear here</p>
             </div>
           ) : (
-            <div className="border border-border/50 rounded-2xl overflow-hidden">
-              <table className="w-full">
+            <div className="border border-border/50 rounded-2xl overflow-hidden overflow-x-auto">
+              <table className="w-full min-w-[800px]">
                 <thead className="bg-muted/30">
                   <tr>
-                    <th className="text-left p-4 border-b border-border/50">
+                    <th className="text-left p-4 border-b border-border/50 w-[30%]">
                       <SortButton field="job_title">Job Title</SortButton>
                     </th>
-                    <th className="text-left p-4 border-b border-border/50">
+                    <th className="text-left p-4 border-b border-border/50 w-[25%]">
                       <SortButton field="company_name">Company Name</SortButton>
                     </th>
-                    <th className="text-left p-4 border-b border-border/50">
+                    <th className="text-left p-4 border-b border-border/50 w-[25%]">
                       <SortButton field="created_at">Date Generated</SortButton>
                     </th>
-                    <th className="text-right p-4 border-b border-border/50">Actions</th>
+                    <th className="text-right p-4 border-b border-border/50 w-[20%]">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
