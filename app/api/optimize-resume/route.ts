@@ -7,13 +7,14 @@ import {
   Paragraph,
   TextRun,
   AlignmentType,
-  BorderStyle,
-  convertInchesToTwip,
   Table,
   TableRow,
   TableCell,
+  BorderStyle,
   WidthType,
+  convertInchesToTwip,
   TableBorders,
+  ShadingType,
 } from "docx"
 import { z } from "zod"
 
@@ -94,7 +95,17 @@ const ResumeSchema = z.object({
 
 type ResumeData = z.infer<typeof ResumeSchema>
 
-const PINE_GREEN = "2D5A3D"
+const PASTEL_GREENS = [
+  "A8D5BA", // Mint
+  "90C9A7", // Sage
+  "B5E2C9", // Light mint
+  "7FBC8C", // Soft fern
+  "C1E7D4", // Pale seafoam
+  "9FD4B0", // Eucalyptus
+  "85C49B", // Moss
+  "AEDCBE", // Celadon
+]
+const HEADER_GREEN = "5A9E6F" // Slightly darker for headers
 
 function sanitizeText(text: string): string {
   return text
@@ -123,9 +134,9 @@ function generateDocx(resume: ResumeData): Document {
         new TextRun({
           text: sanitizeText(resume.name),
           bold: true,
-          size: 40,
+          size: 36,
           font: "Calibri",
-          color: PINE_GREEN, // Pine green name
+          color: HEADER_GREEN, // Pine green name
         }),
       ],
       alignment: AlignmentType.CENTER,
@@ -175,6 +186,11 @@ function generateDocx(resume: ResumeData): Document {
     )
   }
 
+  const getPastelGreen = (index: number): string => {
+    return PASTEL_GREENS[index % PASTEL_GREENS.length]
+  }
+
+  // Helper function to add section headers
   const addSectionHeader = (title: string) => {
     sections.push(
       new Paragraph({
@@ -184,18 +200,17 @@ function generateDocx(resume: ResumeData): Document {
             bold: true,
             size: 24,
             font: "Calibri",
-            color: PINE_GREEN,
+            color: HEADER_GREEN,
           }),
         ],
+        spacing: { before: 200, after: 60 },
         border: {
           bottom: {
-            color: PINE_GREEN,
-            space: 1,
             style: BorderStyle.SINGLE,
-            size: 8,
+            size: 12,
+            color: HEADER_GREEN,
           },
         },
-        spacing: { before: 300, after: 150 },
       }),
     )
   }
@@ -220,67 +235,106 @@ function generateDocx(resume: ResumeData): Document {
   if (resume.skills && resume.skills.length > 0) {
     addSectionHeader("Key Skills")
 
-    // Create skill bubbles as a table with bordered cells
-    const skillsPerRow = 4
-    const skillRows: TableRow[] = []
+    const skillCells: TableCell[] = resume.skills.map(
+      (skill, index) =>
+        new TableCell({
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: sanitizeText(skill),
+                  size: 20,
+                  font: "Calibri",
+                  color: "3D6B4A", // Dark green text for contrast
+                }),
+              ],
+              alignment: AlignmentType.CENTER,
+            }),
+          ],
+          shading: {
+            type: ShadingType.SOLID,
+            color: getPastelGreen(index),
+            fill: getPastelGreen(index),
+          },
+          borders: {
+            top: { style: BorderStyle.SINGLE, size: 12, color: getPastelGreen(index) },
+            bottom: { style: BorderStyle.SINGLE, size: 12, color: getPastelGreen(index) },
+            left: { style: BorderStyle.SINGLE, size: 12, color: getPastelGreen(index) },
+            right: { style: BorderStyle.SINGLE, size: 12, color: getPastelGreen(index) },
+          },
+          margins: {
+            top: convertInchesToTwip(0.06),
+            bottom: convertInchesToTwip(0.06),
+            left: convertInchesToTwip(0.15),
+            right: convertInchesToTwip(0.15),
+          },
+          width: { size: WidthType.AUTO, type: WidthType.AUTO },
+        }),
+    )
 
-    for (let i = 0; i < resume.skills.length; i += skillsPerRow) {
-      const rowSkills = resume.skills.slice(i, i + skillsPerRow)
-      const cells: TableCell[] = rowSkills.map(
-        (skill) =>
-          new TableCell({
-            children: [
-              new Paragraph({
-                children: [
-                  new TextRun({
-                    text: sanitizeText(skill),
-                    size: 20,
-                    font: "Calibri",
-                    color: PINE_GREEN,
-                  }),
-                ],
-                alignment: AlignmentType.CENTER,
-              }),
-            ],
-            borders: {
-              top: { style: BorderStyle.SINGLE, size: 8, color: PINE_GREEN },
-              bottom: { style: BorderStyle.SINGLE, size: 8, color: PINE_GREEN },
-              left: { style: BorderStyle.SINGLE, size: 8, color: PINE_GREEN },
-              right: { style: BorderStyle.SINGLE, size: 8, color: PINE_GREEN },
-            },
-            margins: {
-              top: convertInchesToTwip(0.05),
-              bottom: convertInchesToTwip(0.05),
-              left: convertInchesToTwip(0.1),
-              right: convertInchesToTwip(0.1),
-            },
-            width: { size: 25, type: WidthType.PERCENTAGE },
-          }),
+    const skillRows: TableRow[] = []
+    let currentIndex = 0
+    const rowPatterns = [5, 4, 5, 4, 5] // Alternating pattern for visual interest
+
+    while (currentIndex < skillCells.length) {
+      const patternIndex = skillRows.length % rowPatterns.length
+      const skillsInThisRow = Math.min(rowPatterns[patternIndex], skillCells.length - currentIndex)
+      const rowCells = skillCells.slice(currentIndex, currentIndex + skillsInThisRow)
+
+      const spacedCells: TableCell[] = []
+      rowCells.forEach((cell, idx) => {
+        spacedCells.push(cell)
+        if (idx < rowCells.length - 1) {
+          spacedCells.push(
+            new TableCell({
+              children: [new Paragraph({ children: [] })],
+              borders: {
+                top: { style: BorderStyle.NIL },
+                bottom: { style: BorderStyle.NIL },
+                left: { style: BorderStyle.NIL },
+                right: { style: BorderStyle.NIL },
+              },
+              width: { size: 150, type: WidthType.DXA },
+            }),
+          )
+        }
+      })
+
+      skillRows.push(
+        new TableRow({
+          children: spacedCells,
+          height: { value: convertInchesToTwip(0.35), rule: "atLeast" as const },
+        }),
       )
 
-      // Fill remaining cells with empty cells if row is not complete
-      while (cells.length < skillsPerRow) {
-        cells.push(
-          new TableCell({
-            children: [new Paragraph({ children: [] })],
-            borders: {
-              top: { style: BorderStyle.NIL },
-              bottom: { style: BorderStyle.NIL },
-              left: { style: BorderStyle.NIL },
-              right: { style: BorderStyle.NIL },
-            },
-            width: { size: 25, type: WidthType.PERCENTAGE },
+      if (currentIndex + skillsInThisRow < skillCells.length) {
+        skillRows.push(
+          new TableRow({
+            children: [
+              new TableCell({
+                children: [new Paragraph({ children: [] })],
+                borders: {
+                  top: { style: BorderStyle.NIL },
+                  bottom: { style: BorderStyle.NIL },
+                  left: { style: BorderStyle.NIL },
+                  right: { style: BorderStyle.NIL },
+                },
+                columnSpan: spacedCells.length,
+              }),
+            ],
+            height: { value: convertInchesToTwip(0.1), rule: "exact" as const },
           }),
         )
       }
 
-      skillRows.push(new TableRow({ children: cells }))
+      currentIndex += skillsInThisRow
     }
 
     const skillsTable = new Table({
       rows: skillRows,
       width: { size: 100, type: WidthType.PERCENTAGE },
       borders: TableBorders.NONE,
+      alignment: AlignmentType.CENTER,
     })
 
     sections.push(new Paragraph({ spacing: { after: 100 } }))
@@ -466,7 +520,7 @@ function generateDocx(resume: ResumeData): Document {
                     text: "  |  " + sanitizeText(project.url),
                     size: 20,
                     font: "Calibri",
-                    color: PINE_GREEN,
+                    color: HEADER_GREEN,
                   }),
                 ]
               : []),
@@ -585,7 +639,7 @@ TASK: Analyze the provided resume and job description, then return a restructure
 
 REQUIREMENTS:
 1. Extract and enhance all information from the original resume
-2. Optimize content to align with the job description requirements
+2. Optimize content to align with the job description requirements exactly
 3. Use high-impact action verbs and quantified achievements
 4. Prioritize skills that match the job description - list most relevant skills first
 5. Each skill in the skills array MUST be exactly ONE skill (e.g., "Python", "Project Management", "AWS") - never combine multiple skills
