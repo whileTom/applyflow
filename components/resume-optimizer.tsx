@@ -80,6 +80,8 @@ export function ResumeOptimizer() {
   const [promptSent, setPromptSent] = useState("")
   const [rawResponse, setRawResponse] = useState("")
   const [optionsOpen, setOptionsOpen] = useState(false)
+  const [customGoogleDriveUrl, setCustomGoogleDriveUrl] = useState("")
+  const [savedGoogleDriveUrl, setSavedGoogleDriveUrl] = useState<string | null>(null)
   const dialogFileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -112,6 +114,12 @@ export function ResumeOptimizer() {
       setSavedApiKey(savedKey)
       setApiKey(savedKey)
     }
+
+    const savedUrl = localStorage.getItem("googleDriveUrl")
+    if (savedUrl) {
+      setSavedGoogleDriveUrl(savedUrl)
+      setCustomGoogleDriveUrl(savedUrl)
+    }
   }, [])
 
   const saveAsDefault = async () => {
@@ -134,7 +142,6 @@ export function ResumeOptimizer() {
         throw new Error(result.error || "Failed to upload resume")
       }
 
-      // Also save locally for quick access
       const arrayBuffer = await resumeFile.arrayBuffer()
       const base64 = btoa(new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), ""))
       const saved = { name: resumeFile.name, data: base64 }
@@ -177,36 +184,40 @@ export function ResumeOptimizer() {
 
   const loadFromGoogleDrive = async () => {
     try {
-      addLog("info", "Fetching resume from Google Drive...")
-      const exportUrl = `https://docs.google.com/document/d/${GOOGLE_DRIVE_DOC_ID}/export?format=docx&t=${PAGE_LOAD_TIMESTAMP}`
-      const response = await fetch(exportUrl, { cache: "no-store" })
+      addLog("info", "Loading resume from Google Drive...")
+
+      let exportUrl: string
+
+      if (savedGoogleDriveUrl) {
+        const match = savedGoogleDriveUrl.match(/\/d\/([a-zA-Z0-9_-]+)/)
+        if (!match) {
+          throw new Error("Invalid Google Drive URL format")
+        }
+        const docId = match[1]
+        exportUrl = `https://docs.google.com/document/d/${docId}/export?format=docx&t=${PAGE_LOAD_TIMESTAMP}`
+      } else {
+        exportUrl = `https://docs.google.com/document/d/${GOOGLE_DRIVE_DOC_ID}/export?format=docx&t=${PAGE_LOAD_TIMESTAMP}`
+      }
+
+      const response = await fetch(exportUrl, {
+        cache: "no-store",
+      })
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch from Google Drive: ${response.status}`)
+        throw new Error("Failed to fetch from Google Drive")
       }
 
       const blob = await response.blob()
-      const arrayBuffer = await blob.arrayBuffer()
-      const bytes = new Uint8Array(arrayBuffer)
-
-      // Convert to base64 for storage
-      let binary = ""
-      for (let i = 0; i < bytes.length; i++) {
-        binary += String.fromCharCode(bytes[i])
-      }
-      const base64Data = btoa(binary)
-
-      const fileName = "google-drive-resume.docx"
-      const file = new File([blob], fileName, {
+      const file = new File([blob], "Resume.docx", {
         type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       })
 
       setResumeFile(file)
-      setDefaultResume({ name: fileName, data: base64Data })
-      setUseDefaultResume(true)
-      addLog("success", "Loaded resume from Google Drive", fileName)
+      addLog("success", "Loaded resume from Google Drive", file.name)
     } catch (error) {
-      addLog("error", "Failed to load from Google Drive", error instanceof Error ? error.message : "Unknown error")
+      const message = error instanceof Error ? error.message : "Unknown error"
+      addLog("error", "Failed to load from Google Drive", message)
+      setError(`Failed to load from Google Drive: ${message}`)
     }
   }
 
@@ -223,6 +234,21 @@ export function ResumeOptimizer() {
     setSavedApiKey(null)
     setApiKey("")
     addLog("info", "Saved API key cleared")
+  }
+
+  const saveGoogleDriveUrl = () => {
+    if (customGoogleDriveUrl.trim()) {
+      localStorage.setItem("googleDriveUrl", customGoogleDriveUrl.trim())
+      setSavedGoogleDriveUrl(customGoogleDriveUrl.trim())
+      addLog("success", "Google Drive URL saved", customGoogleDriveUrl.trim())
+    }
+  }
+
+  const clearSavedGoogleDriveUrl = () => {
+    localStorage.removeItem("googleDriveUrl")
+    setSavedGoogleDriveUrl(null)
+    setCustomGoogleDriveUrl("")
+    addLog("info", "Cleared saved Google Drive URL")
   }
 
   const addLog = (type: DebugLog["type"], message: string, data?: string) => {
@@ -412,7 +438,6 @@ export function ResumeOptimizer() {
       localStorage.setItem("defaultResume", JSON.stringify(saved))
       setDefaultResume(saved)
 
-      // Also set as current file
       setResumeFile(file)
       setUseDefaultResume(true)
 
@@ -422,7 +447,6 @@ export function ResumeOptimizer() {
       addLog("error", "Failed to save default resume", errorMessage)
     }
 
-    // Reset input
     if (dialogFileInputRef.current) {
       dialogFileInputRef.current.value = ""
     }
@@ -437,9 +461,9 @@ export function ResumeOptimizer() {
 
           <div className="text-center flex-1">
             <h1 className="text-4xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
-              Tom&apos;s Resume Optimizer
+              ApplyFlow
             </h1>
-            <p className="text-muted-foreground/80 mt-2">fight 🤖🔥 with 🤖🔥</p>
+            <p className="text-muted-foreground/80 mt-2">Streamline your path from application to offer</p>
           </div>
 
           {/* Options Dialog */}
@@ -613,6 +637,67 @@ export function ResumeOptimizer() {
                     </div>
                   )}
                 </div>
+
+                <div className="h-px bg-border/50" />
+
+                {/* Custom Google Drive URL Section */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-primary/10 ring-1 ring-primary/20">
+                      <FileText className="w-4 h-4 text-primary" />
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-foreground">Custom Google Drive URL</h4>
+                      <p className="text-xs text-muted-foreground/70">
+                        {savedGoogleDriveUrl
+                          ? "Custom URL configured"
+                          : customGoogleDriveUrl.trim()
+                            ? "URL entered (not saved)"
+                            : "Using default Google Drive resume"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="relative">
+                    <Input
+                      type="text"
+                      placeholder="https://docs.google.com/document/d/..."
+                      value={customGoogleDriveUrl}
+                      onChange={(e) => setCustomGoogleDriveUrl(e.target.value)}
+                      className="rounded-xl h-11 bg-input/50 border-border/50 focus:border-primary/50 focus:ring-primary/20"
+                    />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={saveGoogleDriveUrl}
+                      disabled={!customGoogleDriveUrl.trim() || customGoogleDriveUrl.trim() === savedGoogleDriveUrl}
+                      className="rounded-xl bg-transparent"
+                    >
+                      <Save className="w-4 h-4 mr-2" />
+                      Save URL
+                    </Button>
+                    {savedGoogleDriveUrl && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={clearSavedGoogleDriveUrl}
+                        className="rounded-xl text-destructive hover:text-destructive bg-transparent"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-muted-foreground/60">
+                    Paste a Google Drive sharing link for your resume document
+                  </p>
+                </div>
               </div>
             </DialogContent>
           </Dialog>
@@ -647,7 +732,7 @@ export function ResumeOptimizer() {
               {/* Collapsible header with click handler */}
               <CardHeader>
                 <div
-                  className="flex items-center justify-between cursor-pointer rounded-xl p-2 -m-2 transition-colors"
+                  className="flex items-center justify-between cursor-pointer rounded-xl p-2 -m-2 transition-colors hover:bg-gradient-to-r hover:from-primary/10 hover:to-accent/10"
                   onClick={() => setUploadExpanded(!uploadExpanded)}
                 >
                   <div className="flex items-center gap-4">

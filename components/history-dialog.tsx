@@ -12,7 +12,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { History, Download, ArrowUpDown, Trash2 } from "lucide-react"
+import { History, Download, ArrowUpDown, Trash2, FileText } from "lucide-react"
 
 interface HistoryRecord {
   id: string
@@ -93,6 +93,19 @@ export function HistoryDialog() {
     const a = document.createElement("a")
     a.href = url
     a.download = `${record.job_title.replace(/\s+/g, "_")}_${record.company_name.replace(/\s+/g, "_")}_resume.docx`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  // Added function to download job description as text file
+  const handleDownloadJobDescription = (record: HistoryRecord) => {
+    const blob = new Blob([record.job_description], { type: "text/plain" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `${record.job_title.replace(/\s+/g, "_")}_${record.company_name.replace(/\s+/g, "_")}_job_description.txt`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -206,19 +219,31 @@ export function HistoryDialog() {
                       <td className="p-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <Button
+                            onClick={() => handleDownloadJobDescription(record)}
+                            size="sm"
+                            variant="outline"
+                            className="rounded-xl hover:bg-accent/10 hover:border-accent/50"
+                            title="Download Job Description"
+                          >
+                            <FileText className="w-4 h-4 mr-1" />
+                            JD
+                          </Button>
+                          <Button
                             onClick={() => handleDownload(record)}
                             size="sm"
                             variant="outline"
                             className="rounded-xl hover:bg-primary/10 hover:border-primary/50"
+                            title="Download Resume"
                           >
                             <Download className="w-4 h-4 mr-1" />
-                            Download
+                            Resume
                           </Button>
                           <Button
                             onClick={() => handleDelete(record.id)}
                             size="sm"
                             variant="outline"
                             className="rounded-xl text-destructive hover:bg-destructive/10 hover:border-destructive/50"
+                            title="Delete Record"
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
