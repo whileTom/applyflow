@@ -1,0 +1,55 @@
+Description
+
+Important: An active LinkedIn profile with at least one recommendation or verification is required for consideration.
+
+Due to HIPAA compliance regulations, this position is open only to candidates who currently reside in the United States and are legally authorized to work in the US. We do not currently support new visa sponsorships or transfers.
+
+This position requires a background check.
+
+We’re looking for a Microsoft Full Stack Developer who thrives on solving complex problems and enjoys wearing many hats. You’ll work across all layers of our healthcare platform, helping to design and implement intelligent solutions that power both our internal systems and AI-driven patient communication tools.
+
+You will:
+
+Work as part of a dynamic team on the development of Keona’s premier flagship healthcare patient access platform. 
+
+Design and develop scalable applications using .NET, C#, React, and Azure SQL
+
+Deliver across the entire development lifecycle
+
+Collaborate on AI-driven automation workflows, including natural language processing, classification, and recommendation features within our CRM and call automation platform
+
+Contribute to DevOps pipelines
+
+Support customer onboardings and troubleshoot issues across the product stack
+
+Participate in rotating support days, working with customer success and engineering teams to resolve support tickets and ensure a great experience for clients
+
+Communicate clearly with teammates, customer success staff, and clients to troubleshoot issues and deliver effective solutions
+
+Requirements
+
+6+ Years experience with .NET MVC with C#, HTML, CSS, JavaScript
+
+3+ years of experience with React (or a comparable modern JavaScript framework such as Angular)
+
+3+ Years experience with Microsoft SQL Server or Azure SQL with strong knowledge of the SQL language
+
+2+ years of experience with Azure cloud infrastructure
+
+1+ years of experience configuring and maintaining CI/CD pipelines using tools such as TeamCity, Octopus Deploy, or equivalent
+
+Excellent written and verbal communication skills, with the ability to explain technical concepts clearly to both technical and non-technical audiences
+
+Solid understanding of networking fundamentals (DNS, firewalls, load balancing, SSL, VPN)
+
+Bachelor's degree in Computer Science, MIS, or related field, or equivalent experience
+
+Nice to have: Experience with healthcare data standards (HIPAA, HL7, FHIR)
+
+Benefits
+
+Company Description
+
+Keona Health is transforming how patients connect with their healthcare providers by bringing modern customer service and AI technology to healthcare. We are leading the development of healthcare’s most advanced CRM, ticketing, and AI call automation platform. Join our team during this exciting period of growth!
+
+We offer excellent work/life balance and full health benefits for you and your family. This position is 100% remote.
